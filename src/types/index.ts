@@ -16,12 +16,11 @@ export type WallpaperItem = {
 
 export type BannerItem = {
   id: string;
-  title: string;
-  subtitle: string;
-  uri: string;
-  gradient: string[];
+  title: string;      // e.g., "EDITORS"
+  subtitle: string;   // e. g., "CHOICE"
+  uri: string;        // Image URL
+  gradient?: string[];
 };
-
 export type CategoryItem = {
   id: string;
   title: string;

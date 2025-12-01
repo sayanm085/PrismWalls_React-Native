@@ -26,8 +26,8 @@ export const HomeHeader = React.memo(function HomeHeader({
         transition={{ type: 'spring', delay: 150 }}
         style={styles.logoContainer}
       >
-        <Text style={styles.logoWall}>WALL</Text>
-        <Text style={styles.logoPers}>PERS</Text>
+        <Text style={styles.logoWall}>Prism</Text>
+        <Text style={styles.logoPers}>Walls</Text>
       </MotiView>
 
       <IconButton icon="search" onPress={onSearchPress} delay={100} />
