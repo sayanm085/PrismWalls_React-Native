@@ -1,98 +1,230 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+/**
+ * =============================================================================
+ * WALLPERS - Home Screen
+ * =============================================================================
+ * 
+ * Main home screen with:
+ * - Animated header with search
+ * - Banner carousel with pagination
+ * - Category horizontal list
+ * - Masonry grid of wallpapers
+ * - Persistent bottom navigation
+ * 
+ * Author: WALLPERS Team
+ * =============================================================================
+ */
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import MasonryList from '@react-native-seoul/masonry-list';
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  StatusBar,
+  StyleSheet,
+  View,
+} from 'react-native';
+import {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
+
+// Components
+import { SectionHeader } from '@/src/components/common';
+import {
+  AnimatedWallpaperCard,
+  BannerCarousel,
+  CategorySection,
+  HomeHeader,
+} from '@/src/components/home';
+
+// Data & Constants
+import { COLORS, LAYOUT } from '@/src/constants';
+import { BANNERS, CATEGORIES, WALLPAPERS } from '@/src/data/mockData';
+import { BannerItem, TabName, WallpaperItem } from '@/src/types';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabName>('home');
+  const scrollY = useSharedValue(0);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  /**
+   * Reset tab to 'home' when this screen is focused
+   * This runs every time user comes back to this screen
+   */
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab('home');
+    }, [])
+  );
+
+  /**
+   * Animated header opacity on scroll
+   */
+  const animatedHeaderStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [0, 100],
+      [1, 0.95],
+      Extrapolation.CLAMP
+    ),
+  }));
+
+  /**
+   * Handle bottom tab navigation
+   */
+  const handleTabPress = useCallback(
+    (tab: TabName) => {
+      if (tab === 'home') {
+        setActiveTab('home');
+        return;
+      }
+
+      setActiveTab(tab);
+
+      const routes: Record<TabName, string | null> = {
+        home: null,
+        favorites: '/favorites',
+        category: '/search',
+        trending: '/trending',
+        settings: '/settings',
+      };
+
+      const route = routes[tab];
+      if (route) {
+        router.push(route as any);
+      }
+    },
+    [router]
+  );
+
+  /**
+   * Handle search button press
+   */
+  const handleSearchPress = useCallback(() => {
+    router. push('/search');
+  }, [router]);
+
+  /**
+   * Handle banner press
+   */
+  const handleBannerPress = useCallback(
+    (item: BannerItem) => {
+      console.log('Banner pressed:', item.id);
+      router. push('/viewer');
+    },
+    [router]
+  );
+
+  /**
+   * Handle category press
+   */
+  const handleCategoryPress = useCallback(
+    (id?: string | number) => {
+      console.log('Category pressed:', id);
+      router.push('/search');
+    },
+    [router]
+  );
+
+  /**
+   * Handle wallpaper press
+   */
+  const handleWallpaperPress = useCallback(
+    (item: WallpaperItem) => {
+      console.log('Wallpaper pressed:', item.id);
+      router.push('/viewer');
+    },
+    [router]
+  );
+
+  /**
+   * Handle favorite toggle
+   */
+  const handleToggleFavorite = useCallback((item: WallpaperItem) => {
+    console.log('Toggle favorite:', item.id);
+    // TODO: Implement with state management
+  }, []);
+
+  /**
+   * Handle scroll for header animation
+   */
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scrollY. value = event.nativeEvent.contentOffset.y;
+    },
+    [scrollY]
+  );
+
+  /**
+   * Render wallpaper item in masonry grid
+   */
+  const renderWallpaperItem = useCallback(
+    ({ item, i }: { item: unknown; i: number }) => (
+      <AnimatedWallpaperCard
+        item={item as WallpaperItem}
+        index={i}
+        onPress={handleWallpaperPress}
+        onToggleFavorite={handleToggleFavorite}
+      />
+    ),
+    [handleWallpaperPress, handleToggleFavorite]
+  );
+
+  /**
+   * List header component (memoized for performance)
+   */
+  const ListHeader = useMemo(
+    () => (
+      <View>
+        <HomeHeader
+          onSearchPress={handleSearchPress}
+          animatedStyle={animatedHeaderStyle}
+        />
+        <BannerCarousel data={BANNERS} onBannerPress={handleBannerPress} />
+        <CategorySection
+          data={CATEGORIES}
+          onCategoryPress={handleCategoryPress}
+        />
+        <SectionHeader title="Explore" delay={350} />
+      </View>
+    ),
+    [animatedHeaderStyle, handleSearchPress, handleBannerPress, handleCategoryPress]
+  );
+
+  return (
+    <View style={styles. container}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+
+      {/* Masonry Grid */}
+      <MasonryList
+        data={WALLPAPERS}
+        keyExtractor={(item) => (item as WallpaperItem).id}
+        numColumns={LAYOUT.COLUMNS}
+        renderItem={renderWallpaperItem}
+        ListHeaderComponent={ListHeader}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      />
+
+      {/* Bottom Navigation */}
+      {/* <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} /> */}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  content: {
+    paddingHorizontal: LAYOUT.PADDING,
+    paddingBottom: LAYOUT.NAV_HEIGHT + 50,
   },
 });

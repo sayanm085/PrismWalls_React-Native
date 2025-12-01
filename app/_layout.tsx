@@ -1,24 +1,40 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+/**
+ * =============================================================================
+ * Root Layout
+ * =============================================================================
+ * 
+ * Main app layout - handles navigation stack
+ * Settings and Viewer open as stack screens (overlay tabs)
+ * =============================================================================
+ */
+
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { StatusBar } from 'react-native';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F9FE" />
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* Tab screens */}
+        <Stack.Screen name="(tabs)" />
+        
+        {/* Stack screens (open on top of tabs) */}
+        <Stack.Screen 
+          name="settings" 
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen 
+          name="viewer" 
+          options={{
+            presentation: 'card',
+            animation: 'fade',
+          }}
+        />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </>
   );
 }
