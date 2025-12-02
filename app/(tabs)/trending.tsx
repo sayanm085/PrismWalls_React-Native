@@ -41,15 +41,15 @@ const CARD_WIDTH = (width - 52) / 2;
 const trendingWallpapers = [
   { 
     id: '1', 
-    image: 'https://images.unsplash. com/photo-1506905925346-21bda4d32df4?w=400',
+    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
     title: 'Mystic Mountains',
-    likes: '12. 5k',
+    likes: '12.5k',
     downloads: '8.2k',
     category: 'Nature'
   },
   { 
     id: '2', 
-    image: 'https://images. unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
+    image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
     title: 'Snow Peaks',
     likes: '9.8k',
     downloads: '6.1k',
@@ -57,7 +57,7 @@ const trendingWallpapers = [
   },
   { 
     id: '3', 
-    image: 'https://images. unsplash.com/photo-1531366936337-7c912a4589a7?w=400',
+    image: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=400',
     title: 'Aurora Dreams',
     likes: '8.2k',
     downloads: '5.4k',
@@ -65,7 +65,7 @@ const trendingWallpapers = [
   },
   { 
     id: '4', 
-    image: 'https://images. unsplash.com/photo-1469854523086-cc02fe5d8800?w=400',
+    image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400',
     title: 'Golden Hour',
     likes: '7.5k',
     downloads: '4.9k',
@@ -73,15 +73,15 @@ const trendingWallpapers = [
   },
   { 
     id: '5', 
-    image: 'https://images.unsplash. com/photo-1682687220742-aba13b6e50ba?w=400',
+    image: 'https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=400',
     title: 'Desert Sunset',
-    likes: '6. 9k',
+    likes: '6.9k',
     downloads: '4.2k',
     category: 'Nature'
   },
   { 
     id: '6', 
-    image: 'https://images. unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
     title: 'Minimal Desk',
     likes: '5.4k',
     downloads: '3.8k',
@@ -89,7 +89,7 @@ const trendingWallpapers = [
   },
   { 
     id: '7', 
-    image: 'https://images.unsplash. com/photo-1519681393784-d120267933ba?w=400',
+    image: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400',
     title: 'Starry Night',
     likes: '4.8k',
     downloads: '3.2k',
@@ -97,7 +97,7 @@ const trendingWallpapers = [
   },
   { 
     id: '8', 
-    image: 'https://images.unsplash. com/photo-1493246507139-91e8fad9978e?w=400',
+    image: 'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=400',
     title: 'Lake Reflection',
     likes: '3.2k',
     downloads: '2.1k',
@@ -105,7 +105,7 @@ const trendingWallpapers = [
   },
   { 
     id: '9', 
-    image: 'https://images. unsplash.com/photo-1518173946687-a4c036bc6c95?w=400',
+    image: 'https://images.unsplash.com/photo-1518173946687-a4c036bc6c95?w=400',
     title: 'Desert Road',
     likes: '2.9k',
     downloads: '1.8k',
@@ -121,7 +121,7 @@ const trendingWallpapers = [
   },
   { 
     id: '11', 
-    image: 'https://images. unsplash.com/photo-1475924156734-496f6cac6ec1?w=400',
+    image: 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=400',
     title: 'Ocean Waves',
     likes: '2.1k',
     downloads: '1.2k',
@@ -129,7 +129,7 @@ const trendingWallpapers = [
   },
   { 
     id: '12', 
-    image: 'https://images. unsplash.com/photo-1433086966358-54859d0ed716?w=400',
+    image: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=400',
     title: 'Waterfall',
     likes: '1.8k',
     downloads: '980',
@@ -217,7 +217,7 @@ const TrendingCard = React.memo(function TrendingCard({
 
         {/* Rank Badge */}
         <View style={[styles.rankBadge, { backgroundColor: getRankColor(index + 1) }]}>
-          <Text style={styles. rankText}>#{index + 1}</Text>
+          <Text style={styles.rankText}>#{index + 1}</Text>
         </View>
 
         {/* Favorite Button */}
@@ -229,24 +229,24 @@ const TrendingCard = React.memo(function TrendingCard({
           <Ionicons
             name={isFavorite ? 'heart' : 'heart-outline'}
             size={18}
-            color={isFavorite ?  '#EF4444' : '#fff'}
+            color={isFavorite ? '#EF4444' : '#fff'}
           />
         </TouchableOpacity>
 
         {/* Card Info */}
-        <View style={styles. cardInfo}>
+        <View style={styles.cardInfo}>
           {/* Category Tag */}
           <View style={styles.categoryTag}>
-            <Text style={styles. categoryText}>{item.category}</Text>
+            <Text style={styles.categoryText}>{item.category}</Text>
           </View>
 
           {/* Title */}
-          <Text style={styles. cardTitle} numberOfLines={1}>
-            {item. title}
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
           </Text>
 
           {/* Stats Row */}
-          <View style={styles. statsRow}>
+          <View style={styles.statsRow}>
             {/* Likes */}
             <View style={styles.statItem}>
               <Ionicons name="heart" size={12} color="#EF4444" />
@@ -305,7 +305,7 @@ export default function TrendingScreen() {
    * Handle wallpaper press - navigate to viewer
    */
   const handleWallpaperPress = useCallback((item: TrendingItem) => {
-    console.log('Trending wallpaper pressed:', item. id);
+    console.log('Trending wallpaper pressed:', item.id);
     router.push('/viewer');
   }, [router]);
 
@@ -345,15 +345,15 @@ export default function TrendingScreen() {
    */
   const ListHeader = useCallback(
     () => (
-      <View style={styles. listHeader}>
+      <View style={styles.listHeader}>
         {/* Stats Summary */}
-        <View style={styles. statsContainer}>
+        <View style={styles.statsContainer}>
           <View style={styles.statBox}>
             <Text style={styles.statBoxValue}>12.5k</Text>
             <Text style={styles.statBoxLabel}>Total Likes</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statBoxValue}>8. 2k</Text>
+            <Text style={styles.statBoxValue}>8.2k</Text>
             <Text style={styles.statBoxLabel}>Downloads</Text>
           </View>
           <View style={styles.statBox}>
@@ -465,7 +465,7 @@ export default function TrendingScreen() {
 // STYLES
 // =============================================================================
 
-const styles = StyleSheet. create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -491,7 +491,7 @@ const styles = StyleSheet. create({
     backgroundColor: '#F97316',
     justifyContent: 'center',
     alignItems: 'center',
-    ... Platform.select({
+    ...Platform.select({
       ios: {
         shadowColor: '#F97316',
         shadowOffset: { width: 0, height: 4 },
@@ -533,7 +533,7 @@ const styles = StyleSheet. create({
   },
 
   filterTabActive: {
-    backgroundColor: COLORS. primary,
+    backgroundColor: COLORS.primary,
   },
 
   filterText: {
@@ -558,7 +558,7 @@ const styles = StyleSheet. create({
     backgroundColor: COLORS.surface,
     borderRadius: 20,
     padding: 16,
-    ... Platform.select({
+    ...Platform.select({
       ios: {
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 4 },
@@ -621,7 +621,7 @@ const styles = StyleSheet. create({
   },
 
   cardOverlay: {
-    ... StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
 
@@ -632,7 +632,7 @@ const styles = StyleSheet. create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    ... Platform.select({
+    ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },

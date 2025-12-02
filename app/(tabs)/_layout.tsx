@@ -62,8 +62,8 @@ const TABS = [
 // =============================================================================
 
 type TabIconProps = {
-  icon: keyof typeof Ionicons. glyphMap;
-  iconOutline: keyof typeof Ionicons. glyphMap;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconOutline: keyof typeof Ionicons.glyphMap;
   focused: boolean;
   onPress: () => void;
 };
@@ -93,7 +93,7 @@ const TabIcon = React.memo(function TabIcon({
       );
     } else {
       scale.value = withTiming(1, { duration: 200, easing: EASING.smooth });
-      translateY.value = withTiming(0, { duration: 200, easing: EASING. smooth });
+      translateY.value = withTiming(0, { duration: 200, easing: EASING.smooth });
     }
   }, [focused, scale, translateY]);
 
@@ -114,7 +114,7 @@ const TabIcon = React.memo(function TabIcon({
         <Ionicons
           name={focused ? icon : iconOutline}
           size={24}
-          color={focused ? '#fff' : COLORS. textSecondary}
+          color={focused ? '#fff' : COLORS.textSecondary}
         />
       </Animated.View>
     </Pressable>
@@ -186,7 +186,7 @@ function CustomTabBar({ state, navigation }: any) {
   };
 
   return (
-    <View style={styles. tabBarWrapper}>
+    <View style={styles.tabBarWrapper}>
       <View style={styles.tabBar}>
         {/* Animated Indicator */}
         <AnimatedIndicator
@@ -197,13 +197,13 @@ function CustomTabBar({ state, navigation }: any) {
         {/* Tab Items */}
         {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
-          const tabData = TABS. find((t) => t.name === route.name);
+          const tabData = TABS.find((t) => t.name === route.name);
 
           return (
             <TabIcon
               key={route.key}
               icon={tabData?.icon as keyof typeof Ionicons.glyphMap}
-              iconOutline={tabData?. iconOutline as keyof typeof Ionicons.glyphMap}
+              iconOutline={tabData?.iconOutline as keyof typeof Ionicons.glyphMap}
               focused={isFocused}
               onPress={() => handlePress(index, route.name, route.key)}
             />
@@ -228,10 +228,10 @@ export default function TabLayout() {
       backBehavior="history"
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs. Screen name="favorites" options={{ title: 'Favorites' }} />
+      <Tabs.Screen name="favorites" options={{ title: 'Favorites' }} />
       <Tabs.Screen name="search" options={{ title: 'Search' }} />
       <Tabs.Screen name="trending" options={{ title: 'Trending' }} />
-      <Tabs. Screen name="settings" options={{ title: 'Settings' }} />
+      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
     </Tabs>
   );
 }
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
-    ... Platform.select({
+    ...Platform.select({
       ios: {
         shadowColor: '#1E293B',
         shadowOffset: { width: 0, height: 10 },

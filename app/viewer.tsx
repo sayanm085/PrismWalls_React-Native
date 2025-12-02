@@ -1,354 +1,532 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+/**
+ * =============================================================================
+ * Wallpaper Viewer Screen - Full Preview
+ * =============================================================================
+ *
+ * Full screen wallpaper preview with:
+ * - High resolution image
+ * - Pinch to zoom
+ * - Download button
+ * - Set as wallpaper button
+ * - Share button
+ * - Photographer credit
+ *
+ * =============================================================================
+ */
+
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
-  Image,
-  Modal,
-  ScrollView,
+  Platform,
+  Pressable,
   StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
 
-const { width, height } = Dimensions. get('window');
+import { COLORS } from '@/src/constants';
+import { usePhoto } from '@/src/hooks';
 
-const tags = ['Anime', 'Blue', 'Night', 'Fantasy', 'Art'];
+// =============================================================================
+// CONSTANTS
+// =============================================================================
 
-const relatedWallpapers = [
-  { id: '1', image: 'https://picsum.photos/150/200?random=40' },
-  { id: '2', image: 'https://picsum.photos/150/200? random=41' },
-  { id: '3', image: 'https://picsum.photos/150/200?random=42' },
-  { id: '4', image: 'https://picsum.photos/150/200? random=43' },
-];
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+type ActionButtonProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+};
+
+// =============================================================================
+// ACTION BUTTON COMPONENT
+// =============================================================================
+
+const ActionButton = ({ icon, label, onPress, loading }: ActionButtonProps) => (
+  <Pressable
+    onPress={onPress}
+    style={({ pressed }) => [
+      styles.actionButton,
+      { opacity: pressed ? 0.7 : 1 },
+    ]}
+    disabled={loading}
+  >
+    <View style={styles.actionIconContainer}>
+      {loading ? (
+        <ActivityIndicator size="small" color="#fff" />
+      ) : (
+        <Ionicons name={icon} size={24} color="#fff" />
+      )}
+    </View>
+    <Text style={styles.actionLabel}>{label}</Text>
+  </Pressable>
+);
+
+// =============================================================================
+// VIEWER SCREEN
+// =============================================================================
 
 export default function ViewerScreen() {
   const router = useRouter();
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
+  const params = useLocalSearchParams<{ id: string }>();
+  const photoId = params.id ? parseInt(params.id, 10) : 0;
+
+  // State
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+
+  // Fetch photo data
+  const { data: photo, isLoading, isError } = usePhoto(photoId);
+
+  // Animated values for pinch zoom
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  // Get image URLs
+  const previewUrl = photo?.src?.large2x || photo?.src?.large || photo?.src?.original || '';
+  const downloadUrl = photo?.src?.original || photo?.src?.large2x || '';
+  const placeholderColor = photo?.avg_color || '#1a1a2e';
+
+  // ==========================================================================
+  // GESTURES
+  // ==========================================================================
+
+  // Pinch gesture for zoom
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      scale.value = savedScale.value * event.scale;
+    })
+    .onEnd(() => {
+      if (scale.value < 1) {
+        scale.value = withSpring(1);
+        savedScale.value = 1;
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else if (scale.value > 4) {
+        scale.value = withSpring(4);
+        savedScale.value = 4;
+      } else {
+        savedScale.value = scale.value;
+      }
+    });
+
+  // Pan gesture for moving zoomed image
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (scale.value > 1) {
+        translateX.value = savedTranslateX.value + event.translationX;
+        translateY.value = savedTranslateY.value + event.translationY;
+      }
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+
+  // Double tap to zoom
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1) {
+        scale.value = withSpring(1);
+        savedScale.value = 1;
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        scale.value = withSpring(2);
+        savedScale.value = 2;
+      }
+    });
+
+  // Single tap to toggle controls
+  const singleTapGesture = Gesture.Tap()
+    .onEnd(() => {
+      runOnJS(setShowControls)(!showControls);
+    });
+
+  // Combine gestures
+  const composedGestures = Gesture.Simultaneous(
+    pinchGesture,
+    panGesture,
+    Gesture.Exclusive(doubleTapGesture, singleTapGesture)
+  );
+
+  // Animated style for image
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+
+  const handleClose = useCallback(() => {
+    router.back();
+  }, [router]);
+
+  const handleDownload = useCallback(async () => {
+    if (!downloadUrl) return;
+
+    try {
+      setIsDownloading(true);
+
+      // Request permission
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to save images.');
+        return;
+      }
+
+      // Download file
+      const filename = `wallpaper_${photoId}_${Date.now()}.jpg`;
+      const fileUri = FileSystem.documentDirectory + filename;
+
+      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
+
+      if (downloadResult.status === 200) {
+        // Save to gallery
+        await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+        Alert.alert('Success', 'Wallpaper saved to gallery!');
+      } else {
+        throw new Error('Download failed');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      Alert.alert('Error', 'Failed to download wallpaper.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [downloadUrl, photoId]);
+
+  const handleShare = useCallback(async () => {
+    if (!downloadUrl) return;
+
+    try {
+      setIsSharing(true);
+
+      const filename = `wallpaper_${photoId}.jpg`;
+      const fileUri = FileSystem.cacheDirectory + filename;
+
+      // Download to cache
+      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
+
+      if (downloadResult.status === 200) {
+        await Sharing.shareAsync(downloadResult.uri);
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert('Error', 'Failed to share wallpaper.');
+    } finally {
+      setIsSharing(false);
+    }
+  }, [downloadUrl, photoId]);
+
+  const handleFavorite = useCallback(() => {
+    // TODO: Implement favorite functionality
+    Alert.alert('Added to Favorites', 'Wallpaper added to your favorites!');
+  }, []);
+
+  // ==========================================================================
+  // LOADING STATE
+  // ==========================================================================
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading wallpaper...</Text>
+      </View>
+    );
+  }
+
+  // ==========================================================================
+  // ERROR STATE
+  // ==========================================================================
+
+  if (isError || !photo) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <Ionicons name="image-outline" size={64} color="#666" />
+        <Text style={styles.errorText}>Failed to load wallpaper</Text>
+        <Pressable onPress={handleClose} style={styles.errorButton}>
+          <Text style={styles.errorButtonText}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ==========================================================================
+  // MAIN RENDER
+  // ==========================================================================
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <GestureHandlerRootView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
 
-      {/* Main Image */}
-      <Image
-        source={{ uri: 'https://picsum.photos/600/900? random=100' }}
-        style={styles. mainImage}
-        resizeMode="cover"
-      />
+      {/* Background Color */}
+      <View style={[styles.background, { backgroundColor: placeholderColor }]} />
 
-      {/* Overlay Gradient */}
-      <View style={styles. topOverlay} />
-      <View style={styles.bottomOverlay} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => setIsFavorite(!isFavorite)}
-        >
-          <Ionicons
-            name={isFavorite ?  'heart' : 'heart-outline'}
-            size={24}
-            color={isFavorite ? '#EF4444' : '#fff'}
+      {/* Zoomable Image */}
+      <GestureDetector gesture={composedGestures}>
+        <Animated.View style={[styles.imageContainer, animatedImageStyle]}>
+          <Image
+            source={{ uri: previewUrl }}
+            style={styles.image}
+            contentFit="contain"
+            transition={300}
+            cachePolicy="memory-disk"
           />
-        </TouchableOpacity>
-      </View>
+        </Animated.View>
+      </GestureDetector>
 
-      {/* Content */}
-      <View style={styles.content}>
-        {/* Info Section */}
-        <View style={styles.infoSection}>
-          <Text style={styles.title}>Artworks by Omuk</Text>
-          <View style={styles.statsRow}>
-            <Ionicons name="eye" size={16} color="#CBD5E1" />
-            <Text style={styles.statsText}>23,009 views</Text>
-          </View>
-        </View>
-
-        {/* Tags */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tagsContainer}
-        >
-          {tags.map((tag, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.tag,
-                index === 0 && styles.tagActive,
+      {/* Top Controls */}
+      {showControls && (
+        <View style={styles.topControls}>
+          <BlurView intensity={30} tint="dark" style={styles.blurContainer}>
+            {/* Close Button */}
+            <Pressable
+              onPress={handleClose}
+              style={({ pressed }) => [
+                styles.closeButton,
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
-              <Text
-                style={[
-                  styles.tagText,
-                  index === 0 && styles.tagTextActive,
-                ]}
-              >
-                {tag}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              <Ionicons name="close" size={28} color="#fff" />
+            </Pressable>
 
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity style={styles. actionButton}>
-            <MaterialCommunityIcons name="wallpaper" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="download" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => setShowOptions(true)}
+            {/* Favorite Button */}
+            <Pressable
+              onPress={handleFavorite}
+              style={({ pressed }) => [
+                styles.favoriteButton,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Ionicons name="heart-outline" size={26} color="#fff" />
+            </Pressable>
+          </BlurView>
+        </View>
+      )}
+
+      {/* Bottom Controls */}
+      {showControls && (
+        <View style={styles.bottomControls}>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.8)']}
+            style={styles.gradient}
           >
-            <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
-          </TouchableOpacity>
+            {/* Photographer Info */}
+            {photo.photographer && (
+              <View style={styles.photographerInfo}>
+                <Ionicons name="camera-outline" size={16} color="#fff" />
+                <Text style={styles.photographerName}>{photo.photographer}</Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <ActionButton
+                icon="download-outline"
+                label="Download"
+                onPress={handleDownload}
+                loading={isDownloading}
+              />
+              <ActionButton
+                icon="share-outline"
+                label="Share"
+                onPress={handleShare}
+                loading={isSharing}
+              />
+              <ActionButton
+                icon="phone-portrait-outline"
+                label="Set Wallpaper"
+                onPress={() => Alert.alert('Info', 'Download first, then set from gallery.')}
+              />
+            </View>
+          </LinearGradient>
         </View>
-
-        {/* Related Section */}
-        <View style={styles.relatedSection}>
-          <Text style={styles.relatedTitle}>Related Wallpapers</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {relatedWallpapers.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.relatedCard}>
-                <Image source={{ uri: item.image }} style={styles.relatedImage} />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* Options Modal */}
-      <Modal
-        visible={showOptions}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOptions(false)}
-      >
-        <TouchableOpacity
-          style={styles. modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowOptions(false)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Options</Text>
-
-            <TouchableOpacity style={styles.modalOption}>
-              <View style={[styles. modalIcon, { backgroundColor: '#4F46E5' }]}>
-                <MaterialCommunityIcons name="cellphone" size={20} color="#fff" />
-              </View>
-              <Text style={styles.modalOptionText}>Set as Home Screen</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.modalOption}>
-              <View style={[styles.modalIcon, { backgroundColor: '#22C55E' }]}>
-                <MaterialCommunityIcons name="lock" size={20} color="#fff" />
-              </View>
-              <Text style={styles. modalOptionText}>Set as Lock Screen</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.modalOption}>
-              <View style={[styles.modalIcon, { backgroundColor: '#F97316' }]}>
-                <MaterialCommunityIcons name="cellphone-lock" size={20} color="#fff" />
-              </View>
-              <Text style={styles.modalOptionText}>Set as Both</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.modalOption}>
-              <View style={[styles.modalIcon, { backgroundColor: '#3B82F6' }]}>
-                <Ionicons name="share-social" size={20} color="#fff" />
-              </View>
-              <Text style={styles.modalOptionText}>Share</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.modalOption}>
-              <View style={[styles. modalIcon, { backgroundColor: '#EF4444' }]}>
-                <Ionicons name="flag" size={20} color="#fff" />
-              </View>
-              <Text style={styles.modalOptionText}>Report</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
+      )}
+    </GestureHandlerRootView>
   );
 }
+
+// =============================================================================
+// STYLES
+// =============================================================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
   },
-  mainImage: {
-    position: 'absolute',
-    width: width,
-    height: height,
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  topOverlay: {
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  // Image
+  imageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  image: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+
+  // Top Controls
+  topControls: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingTop: Platform.OS === 'ios' ? 50 : 40,
+    paddingHorizontal: 16,
+    zIndex: 10,
   },
-  bottomOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 350,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  header: {
+  blurContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  headerButton: {
+  closeButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
+  favoriteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Bottom Controls
+  bottomControls: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 20,
+    zIndex: 10,
   },
-  infoSection: {
-    marginBottom: 16,
+  gradient: {
+    paddingTop: 60,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingHorizontal: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  statsRow: {
+
+  // Photographer
+  photographerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-  },
-  statsText: {
-    fontSize: 14,
-    color: '#CBD5E1',
-    marginLeft: 6,
-  },
-  tagsContainer: {
     marginBottom: 20,
+    gap: 8,
   },
-  tag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginRight: 8,
-  },
-  tagActive: {
-    backgroundColor: '#4F46E5',
-  },
-  tagText: {
-    fontSize: 13,
+  photographerName: {
+    fontSize: 14,
     color: '#fff',
     fontWeight: '500',
   },
-  tagTextActive: {
-    color: '#fff',
-  },
-  actionsContainer: {
+
+  // Action Buttons
+  actionButtons: {
     flexDirection: 'row',
-    backgroundColor: '#4F46E5',
-    borderRadius: 30,
-    padding: 8,
     justifyContent: 'space-around',
-    marginBottom: 24,
   },
   actionButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  relatedSection: {
-    marginBottom: 20,
+  actionLabel: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '500',
   },
-  relatedTitle: {
+
+  // Loading & Error
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#888',
+  },
+  errorText: {
+    marginTop: 16,
     fontSize: 16,
+    color: '#888',
+  },
+  errorButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+  },
+  errorButtonText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 12,
-  },
-  relatedCard: {
-    width: 80,
-    height: 120,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 10,
-  },
-  relatedImage: {
-    width: '100%',
-    height: '100%',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 40,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#CBD5E1',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  modalIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalOptionText: {
-    fontSize: 16,
-    color: '#1E293B',
-    fontWeight: '500',
-    marginLeft: 14,
   },
 });

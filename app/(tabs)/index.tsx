@@ -1,28 +1,32 @@
 /**
  * =============================================================================
- * WALLPERS - Home Screen
+ * WALLPERS - Home Screen (Optimized with FlashList)
  * =============================================================================
- * 
+ *
  * Main home screen with:
  * - Animated header with search
  * - Banner carousel with pagination
  * - Category horizontal list
- * - Masonry grid of wallpapers
- * - Persistent bottom navigation
- * 
+ * - Optimized masonry grid (FlashList)
+ * - Infinite scroll with pull-to-refresh
+ * - Memory-efficient rendering
+ *
  * Author: WALLPERS Team
  * =============================================================================
  */
 
-import MasonryList from '@react-native-seoul/masonry-list';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Pressable,
   StatusBar,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import {
@@ -33,7 +37,7 @@ import {
 } from 'react-native-reanimated';
 
 // Components
-import { SectionHeader } from '@/src/components/common';
+import { OptimizedMasonryList, SectionHeader } from '@/src/components/common';
 import {
   AnimatedWallpaperCard,
   BannerCarousel,
@@ -43,27 +47,89 @@ import {
 
 // Data & Constants
 import { COLORS, LAYOUT } from '@/src/constants';
-import { BANNERS, CATEGORIES, WALLPAPERS } from '@/src/data/mockData';
-import { BannerItem, TabName, WallpaperItem } from '@/src/types';
+import { BANNERS, CATEGORIES } from '@/src/data/mockData';
+
+// Hooks
+import {
+  useCuratedWallpapersInfinite,
+  getFlattenedWallpapers,
+} from '@/src/hooks';
+
+// Types
+import { BannerItem, CategoryItem, TabName, WallpaperItem } from '@/src/types';
+
+// =============================================================================
+// LOADING COMPONENT
+// =============================================================================
+
+const LoadingView = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="large" color={COLORS.primary} />
+    <Text style={styles.loadingText}>Loading wallpapers...</Text>
+  </View>
+);
+
+// =============================================================================
+// ERROR COMPONENT
+// =============================================================================
+
+type ErrorViewProps = {
+  message: string;
+  onRetry: () => void;
+};
+
+const ErrorView = ({ message, onRetry }: ErrorViewProps) => (
+  <View style={styles.errorContainer}>
+    <Ionicons name="cloud-offline-outline" size={48} color={COLORS.textSecondary} />
+    <Text style={styles.errorText}>{message}</Text>
+    <Pressable onPress={onRetry} style={styles.retryButton}>
+      <Text style={styles.retryButtonText}>Try Again</Text>
+    </Pressable>
+  </View>
+);
+
+// =============================================================================
+// HOME SCREEN
+// =============================================================================
 
 export default function HomeScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const scrollY = useSharedValue(0);
 
-  /**
-   * Reset tab to 'home' when this screen is focused
-   * This runs every time user comes back to this screen
-   */
+  // ==========================================================================
+  // API DATA FETCHING
+  // ==========================================================================
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    isRefetching,
+  } = useCuratedWallpapersInfinite(20);
+
+  // Get flattened wallpapers array from paginated data
+  const wallpapers = useMemo(() => getFlattenedWallpapers(data), [data]);
+
+  // ==========================================================================
+  // FOCUS EFFECT
+  // ==========================================================================
+
   useFocusEffect(
     useCallback(() => {
       setActiveTab('home');
     }, [])
   );
 
-  /**
-   * Animated header opacity on scroll
-   */
+  // ==========================================================================
+  // ANIMATED STYLES
+  // ==========================================================================
+
   const animatedHeaderStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       scrollY.value,
@@ -73,9 +139,10 @@ export default function HomeScreen() {
     ),
   }));
 
-  /**
-   * Handle bottom tab navigation
-   */
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+
   const handleTabPress = useCallback(
     (tab: TabName) => {
       if (tab === 'home') {
@@ -101,72 +168,75 @@ export default function HomeScreen() {
     [router]
   );
 
-  /**
-   * Handle search button press
-   */
   const handleSearchPress = useCallback(() => {
-    router. push('/search');
+    router.push('/search');
   }, [router]);
 
-  /**
-   * Handle banner press
-   */
   const handleBannerPress = useCallback(
     (item: BannerItem) => {
       console.log('Banner pressed:', item.id);
-      router. push('/viewer');
-    },
-    [router]
-  );
-
-  /**
-   * Handle category press
-   */
-  const handleCategoryPress = useCallback(
-    (id?: string | number) => {
-      console.log('Category pressed:', id);
-      router.push('/search');
-    },
-    [router]
-  );
-
-  /**
-   * Handle wallpaper press
-   */
-  const handleWallpaperPress = useCallback(
-    (item: WallpaperItem) => {
-      console.log('Wallpaper pressed:', item.id);
       router.push('/viewer');
     },
     [router]
   );
 
-  /**
-   * Handle favorite toggle
-   */
+  const handleCategoryPress = useCallback(
+    (category: CategoryItem) => {
+      console.log('Category pressed:', category.id);
+      router.push({
+        pathname: '/search',
+        params: { category: category.title },
+      });
+    },
+    [router]
+  );
+
+  const handleWallpaperPress = useCallback(
+    (item: WallpaperItem) => {
+      console.log('Wallpaper pressed:', item.id);
+      router.push({
+        pathname: '/viewer',
+        params: { id: item.id },
+      });
+    },
+    [router]
+  );
+
   const handleToggleFavorite = useCallback((item: WallpaperItem) => {
     console.log('Toggle favorite:', item.id);
     // TODO: Implement with state management
   }, []);
 
-  /**
-   * Handle scroll for header animation
-   */
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      scrollY. value = event.nativeEvent.contentOffset.y;
+      scrollY.value = event.nativeEvent.contentOffset.y;
     },
     [scrollY]
   );
 
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const handleRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  // ==========================================================================
+  // RENDER FUNCTIONS
+  // ==========================================================================
+
   /**
-   * Render wallpaper item in masonry grid
+   * Render single wallpaper item
+   * Used by OptimizedMasonryList
    */
   const renderWallpaperItem = useCallback(
-    ({ item, i }: { item: unknown; i: number }) => (
+    (item: WallpaperItem, index: number) => (
       <AnimatedWallpaperCard
-        item={item as WallpaperItem}
-        index={i}
+        item={item}
+        index={index}
         onPress={handleWallpaperPress}
         onToggleFavorite={handleToggleFavorite}
       />
@@ -175,7 +245,7 @@ export default function HomeScreen() {
   );
 
   /**
-   * List header component (memoized for performance)
+   * List header component (memoized)
    */
   const ListHeader = useMemo(
     () => (
@@ -195,21 +265,84 @@ export default function HomeScreen() {
     [animatedHeaderStyle, handleSearchPress, handleBannerPress, handleCategoryPress]
   );
 
+  /**
+   * List footer component (loading indicator)
+   */
+  const ListFooter = useMemo(
+    () =>
+      isFetchingNextPage ? (
+        <View style={styles.footerLoader}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.footerText}>Loading more... </Text>
+        </View>
+      ) : null,
+    [isFetchingNextPage]
+  );
+
+  /**
+   * Empty state component
+   */
+  const ListEmpty = useMemo(
+    () => (
+      <View style={styles.emptyContainer}>
+        <Ionicons name="images-outline" size={48} color={COLORS.textSecondary} />
+        <Text style={styles.emptyText}>No wallpapers found</Text>
+      </View>
+    ),
+    []
+  );
+
+  // ==========================================================================
+  // LOADING STATE
+  // ==========================================================================
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+        {ListHeader}
+        <LoadingView />
+      </View>
+    );
+  }
+
+  // ==========================================================================
+  // ERROR STATE
+  // ==========================================================================
+
+  if (isError) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+        {ListHeader}
+        <ErrorView
+          message={error?.message || 'Failed to load wallpapers'}
+          onRetry={handleRefresh}
+        />
+      </View>
+    );
+  }
+
+  // ==========================================================================
+  // MAIN RENDER
+  // ==========================================================================
+
   return (
-    <View style={styles. container}>
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
 
-      {/* Masonry Grid */}
-      <MasonryList
-        data={WALLPAPERS}
-        keyExtractor={(item) => (item as WallpaperItem).id}
-        numColumns={LAYOUT.COLUMNS}
+      {/* Optimized Masonry Grid with FlashList */}
+      <OptimizedMasonryList
+        data={wallpapers}
         renderItem={renderWallpaperItem}
         ListHeaderComponent={ListHeader}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        ListFooterComponent={ListFooter}
+        ListEmptyComponent={ListEmpty}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefetching}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
       />
 
       {/* Bottom Navigation */}
@@ -218,13 +351,79 @@ export default function HomeScreen() {
   );
 }
 
+// =============================================================================
+// STYLES
+// =============================================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  content: {
-    paddingHorizontal: LAYOUT.PADDING,
-    paddingBottom: LAYOUT.NAV_HEIGHT + 50,
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
+  // Error
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  // Footer
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  footerText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+
+  // Empty
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
 });

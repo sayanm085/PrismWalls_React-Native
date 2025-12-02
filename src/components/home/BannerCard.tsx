@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
     borderRadius: 28,
     overflow: 'hidden',
-    ... Platform.select({
+    ...Platform.select({
       ios: {
         shadowColor: '#4F46E5',
         shadowOffset: { width: 0, height: 12 },
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   gradient: {
-    ... StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFillObject,
   },
   content: {
     position: 'absolute',
