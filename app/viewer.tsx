@@ -1,13 +1,12 @@
 /**
  * =============================================================================
- * Wallpaper Viewer Screen - Full Preview
+ * Wallpaper Viewer Screen - Full Preview (Expo SDK 54)
  * =============================================================================
  *
  * Full screen wallpaper preview with:
  * - High resolution image
  * - Pinch to zoom
- * - Download button
- * - Set as wallpaper button
+ * - Download button (new File API)
  * - Share button
  * - Photographer credit
  *
@@ -16,10 +15,11 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
+import { File, Paths } from 'expo-file-system/next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useState } from 'react';
@@ -43,7 +43,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 
@@ -66,6 +65,56 @@ type ActionButtonProps = {
   onPress: () => void;
   loading?: boolean;
 };
+
+// =============================================================================
+// HELPER: Check if running in Expo Go
+// =============================================================================
+
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// =============================================================================
+// HELPER: Download file using new File API
+// =============================================================================
+
+async function downloadFile(url: string, filename: string): Promise<File | null> {
+  try {
+    const destinationFile = new File(Paths.cache, filename);
+    
+    // Fetch the image
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status}`);
+    }
+    
+    // Get blob and convert to base64
+    const blob = await response.blob();
+    const base64 = await blobToBase64(blob);
+    
+    // Write to file
+    await destinationFile.write(base64, { encoding: 'base64' });
+    
+    return destinationFile;
+  } catch (error) {
+    console.error('Download error:', error);
+    return null;
+  }
+}
+
+// Helper: Convert blob to base64
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      // Remove data URL prefix
+      const base64 = base64String.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 // =============================================================================
 // ACTION BUTTON COMPONENT
@@ -125,7 +174,6 @@ export default function ViewerScreen() {
   // GESTURES
   // ==========================================================================
 
-  // Pinch gesture for zoom
   const pinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
       scale.value = savedScale.value * event.scale;
@@ -146,7 +194,6 @@ export default function ViewerScreen() {
       }
     });
 
-  // Pan gesture for moving zoomed image
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
       if (scale.value > 1) {
@@ -159,7 +206,6 @@ export default function ViewerScreen() {
       savedTranslateY.value = translateY.value;
     });
 
-  // Double tap to zoom
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -176,20 +222,17 @@ export default function ViewerScreen() {
       }
     });
 
-  // Single tap to toggle controls
   const singleTapGesture = Gesture.Tap()
     .onEnd(() => {
       runOnJS(setShowControls)(!showControls);
     });
 
-  // Combine gestures
   const composedGestures = Gesture.Simultaneous(
     pinchGesture,
     panGesture,
     Gesture.Exclusive(doubleTapGesture, singleTapGesture)
   );
 
-  // Animated style for image
   const animatedImageStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: scale.value },
@@ -209,6 +252,16 @@ export default function ViewerScreen() {
   const handleDownload = useCallback(async () => {
     if (!downloadUrl) return;
 
+    // Check if running in Expo Go
+    if (isExpoGo) {
+      Alert.alert(
+        'Development Build Required',
+        'Download feature requires a development build.\n\nRun: npx expo run:android',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsDownloading(true);
 
@@ -221,13 +274,11 @@ export default function ViewerScreen() {
 
       // Download file
       const filename = `wallpaper_${photoId}_${Date.now()}.jpg`;
-      const fileUri = FileSystem.documentDirectory + filename;
+      const file = await downloadFile(downloadUrl, filename);
 
-      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
-
-      if (downloadResult.status === 200) {
+      if (file) {
         // Save to gallery
-        await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+        await MediaLibrary.saveToLibraryAsync(file.uri);
         Alert.alert('Success', 'Wallpaper saved to gallery!');
       } else {
         throw new Error('Download failed');
@@ -243,17 +294,26 @@ export default function ViewerScreen() {
   const handleShare = useCallback(async () => {
     if (!downloadUrl) return;
 
+    // Check if running in Expo Go
+    if (isExpoGo) {
+      Alert.alert(
+        'Development Build Required',
+        'Share feature requires a development build.\n\nRun: npx expo run:android',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       setIsSharing(true);
 
       const filename = `wallpaper_${photoId}.jpg`;
-      const fileUri = FileSystem.cacheDirectory + filename;
+      const file = await downloadFile(downloadUrl, filename);
 
-      // Download to cache
-      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
-
-      if (downloadResult.status === 200) {
-        await Sharing.shareAsync(downloadResult.uri);
+      if (file) {
+        await Sharing.shareAsync(file.uri);
+      } else {
+        throw new Error('Download failed');
       }
     } catch (error) {
       console.error('Share error:', error);
@@ -264,7 +324,6 @@ export default function ViewerScreen() {
   }, [downloadUrl, photoId]);
 
   const handleFavorite = useCallback(() => {
-    // TODO: Implement favorite functionality
     Alert.alert('Added to Favorites', 'Wallpaper added to your favorites!');
   }, []);
 
@@ -327,7 +386,6 @@ export default function ViewerScreen() {
       {showControls && (
         <View style={styles.topControls}>
           <BlurView intensity={30} tint="dark" style={styles.blurContainer}>
-            {/* Close Button */}
             <Pressable
               onPress={handleClose}
               style={({ pressed }) => [
@@ -338,7 +396,6 @@ export default function ViewerScreen() {
               <Ionicons name="close" size={28} color="#fff" />
             </Pressable>
 
-            {/* Favorite Button */}
             <Pressable
               onPress={handleFavorite}
               style={({ pressed }) => [
@@ -384,7 +441,9 @@ export default function ViewerScreen() {
               <ActionButton
                 icon="phone-portrait-outline"
                 label="Set Wallpaper"
-                onPress={() => Alert.alert('Info', 'Download first, then set from gallery.')}
+                onPress={() =>
+                  Alert.alert('Info', 'Download first, then set from gallery.')
+                }
               />
             </View>
           </LinearGradient>
