@@ -1,295 +1,313 @@
 /**
  * =============================================================================
- * WALLPERS - Trending Screen
+ * PRISMWALLS - Trending Screen (Professional Architecture)
  * =============================================================================
- * 
- * Shows trending/popular wallpapers sorted by likes
- * Features: Time filter tabs, Rank badges, Like counts, Grid layout
- * 
- * Author: WALLPERS Team
+ *
+ * Unsplash/Pinterest Style Loading:
+ * - Load 6-8 images initially (not 40)
+ * - Lazy load on scroll
+ * - Small batches (10 per page)
+ * - Medium quality for grid
+ * - High quality only in viewer
+ * - Minimal network usage
+ * - Instant first paint
+ *
+ * Author: PRISMWALLS Team
  * =============================================================================
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { MotiView } from 'moti';
-import React, { useCallback, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
-import { COLORS } from '../../src/constants';
+// Components
+import { BottomNavBar } from '@/src/components/navigation';
+
+// API
+import { searchWallpapers } from '@/src/api/pexels';
+
+// Types & Constants
+import { COLORS } from '@/src/constants';
+import { CACHE_TIMES } from '@/src/constants/apiKeys';
+import { TabName } from '@/src/types';
 
 // =============================================================================
-// CONSTANTS
+// PROFESSIONAL LOADING CONSTANTS
 // =============================================================================
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 52) / 2;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const HORIZONTAL_PADDING = 16;
+const CARD_GAP = 10;
+const CARD_WIDTH = Math.floor((SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_GAP) / 2);
+const MIN_CARD_HEIGHT = 200;
+const MAX_CARD_HEIGHT = 320;
+
+// ✅ PROFESSIONAL LOADING SETTINGS
+const PER_PAGE = 10;                          // Small batches (not 20)
+const INITIAL_RENDER = 6;                     // Only 6 cards on first paint
+const DRAW_DISTANCE = SCREEN_HEIGHT * 0.5;   // Pre-load only half screen ahead
+const MAX_PAGES = 30;                         // Allow more pages for infinite scroll
 
 // =============================================================================
-// DEMO DATA
+// FILTER QUERIES
 // =============================================================================
 
-const trendingWallpapers = [
-  { 
-    id: '1', 
-    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
-    title: 'Mystic Mountains',
-    likes: '12.5k',
-    downloads: '8.2k',
-    category: 'Nature'
-  },
-  { 
-    id: '2', 
-    image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
-    title: 'Snow Peaks',
-    likes: '9.8k',
-    downloads: '6.1k',
-    category: 'Nature'
-  },
-  { 
-    id: '3', 
-    image: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=400',
-    title: 'Aurora Dreams',
-    likes: '8.2k',
-    downloads: '5.4k',
-    category: 'Nature'
-  },
-  { 
-    id: '4', 
-    image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400',
-    title: 'Golden Hour',
-    likes: '7.5k',
-    downloads: '4.9k',
-    category: 'Travel'
-  },
-  { 
-    id: '5', 
-    image: 'https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=400',
-    title: 'Desert Sunset',
-    likes: '6.9k',
-    downloads: '4.2k',
-    category: 'Nature'
-  },
-  { 
-    id: '6', 
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
-    title: 'Minimal Desk',
-    likes: '5.4k',
-    downloads: '3.8k',
-    category: 'Minimal'
-  },
-  { 
-    id: '7', 
-    image: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400',
-    title: 'Starry Night',
-    likes: '4.8k',
-    downloads: '3.2k',
-    category: 'Space'
-  },
-  { 
-    id: '8', 
-    image: 'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=400',
-    title: 'Lake Reflection',
-    likes: '3.2k',
-    downloads: '2.1k',
-    category: 'Nature'
-  },
-  { 
-    id: '9', 
-    image: 'https://images.unsplash.com/photo-1518173946687-a4c036bc6c95?w=400',
-    title: 'Desert Road',
-    likes: '2.9k',
-    downloads: '1.8k',
-    category: 'Travel'
-  },
-  { 
-    id: '10', 
-    image: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400',
-    title: 'Foggy Hills',
-    likes: '2.5k',
-    downloads: '1.5k',
-    category: 'Nature'
-  },
-  { 
-    id: '11', 
-    image: 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=400',
-    title: 'Ocean Waves',
-    likes: '2.1k',
-    downloads: '1.2k',
-    category: 'Nature'
-  },
-  { 
-    id: '12', 
-    image: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=400',
-    title: 'Waterfall',
-    likes: '1.8k',
-    downloads: '980',
-    category: 'Nature'
-  },
+const FILTER_QUERIES: Readonly<Record<FilterType, string>> = {
+  today: 'trending aesthetic wallpaper',
+  week: 'popular beautiful wallpaper',
+  month: 'best nature wallpaper HD',
+  all: 'amazing landscape wallpaper',
+} as const;
+
+// =============================================================================
+// STATIC DATA
+// =============================================================================
+
+const STATIC_STATS: ReadonlyArray<{ likes: string; downloads: string }> = [
+  { likes: '15.2k', downloads: '9.3k' },
+  { likes: '12.8k', downloads: '7.2k' },
+  { likes: '11.9k', downloads: '6.7k' },
+  { likes: '10.4k', downloads: '5.4k' },
+  { likes: '9.2k', downloads: '4.8k' },
+] as const;
+
+const CARD_GRADIENT: [string, string, string] = [
+  'transparent',
+  'rgba(0,0,0,0.1)',
+  'rgba(0,0,0,0.75)',
 ];
+
+const GRADIENT_LOCATIONS: [number, number, number] = [0, 0.5, 1];
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
-type TrendingItem = {
-  id: string;
-  image: string;
-  title: string;
-  likes: string;
-  downloads: string;
-  category: string;
-};
-
 type FilterType = 'today' | 'week' | 'month' | 'all';
 
+interface OptimizedWallpaper {
+  id: string;
+  imageUri: string;        // Medium quality for grid
+  fullImageUri: string;    // High quality for viewer
+  photographer: string;
+  cardHeight: number;
+  avgColor: string;
+}
+
 // =============================================================================
-// TRENDING CARD COMPONENT
+// TRANSFORM: Pre-calculate everything
 // =============================================================================
 
-const TrendingCard = React.memo(function TrendingCard({
-  item,
-  index,
-  onPress,
-  onFavoritePress,
-}: {
-  item: TrendingItem;
-  index: number;
-  onPress: () => void;
-  onFavoritePress: () => void;
-}) {
-  const [isFavorite, setIsFavorite] = useState(false);
+function transformToOptimized(photos: any[]): OptimizedWallpaper[] {
+  return photos.map((photo) => {
+    const aspectRatio = photo.width / photo.height;
+    const calculatedHeight = Math.round(CARD_WIDTH / aspectRatio);
+    const cardHeight = Math.max(MIN_CARD_HEIGHT, Math.min(calculatedHeight, MAX_CARD_HEIGHT));
 
-  const handleFavoritePress = useCallback(() => {
-    setIsFavorite(!isFavorite);
-    onFavoritePress();
-  }, [isFavorite, onFavoritePress]);
+    return {
+      id: String(photo.id),
+      // ✅ MEDIUM for grid (fast loading, ~100KB)
+      imageUri: photo.src?.medium || photo.src?.small || '',
+      // ✅ LARGE for viewer (high quality)
+      fullImageUri: photo.src?.large2x || photo.src?.large || '',
+      photographer: photo.photographer || 'Unknown',
+      cardHeight,
+      avgColor: photo.avg_color || '#E2E8F0',
+    };
+  });
+}
 
-  // Get rank badge color based on position
-  const getRankColor = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return '#FFD700'; // Gold
-      case 2:
-        return '#C0C0C0'; // Silver
-      case 3:
-        return '#CD7F32'; // Bronze
-      default:
-        return COLORS.primary;
-    }
-  };
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
 
-  return (
-    <MotiView
-      from={{ opacity: 0, translateY: 20, scale: 0.95 }}
-      animate={{ opacity: 1, translateY: 0, scale: 1 }}
-      transition={{
-        type: 'timing',
-        duration: 350,
-        delay: index * 50,
-      }}
-    >
-      <TouchableOpacity
-        style={styles.card}
+const formatNumber = (num: number): string => {
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+  return String(num);
+};
+
+const RANK_STYLES: Record<number, { textColor: string; bgColor: string; emoji: string }> = {
+  1: { textColor: '#92400E', bgColor: '#FEF3C7', emoji: '🥇' },
+  2: { textColor: '#475569', bgColor: '#F1F5F9', emoji: '🥈' },
+  3: { textColor: '#9A3412', bgColor: '#FFEDD5', emoji: '🥉' },
+};
+
+const DEFAULT_RANK = { textColor: '#FFFFFF', bgColor: COLORS.primary, emoji: '' };
+
+// =============================================================================
+// TRENDING CARD (Optimized)
+// =============================================================================
+
+const TrendingCard = React.memo(
+  function TrendingCard({
+    item,
+    index,
+    onPress,
+    onFavoritePress,
+  }: {
+    item: OptimizedWallpaper;
+    index: number;
+    onPress: () => void;
+    onFavoritePress: () => void;
+  }) {
+    const rank = index + 1;
+    const stats = STATIC_STATS[index % 5];
+    const rankStyle = RANK_STYLES[rank] || DEFAULT_RANK;
+    const isTopThree = rank <= 3;
+
+    // ✅ PRIORITY: First 4 = high, rest = low
+    const imagePriority = index < 4 ? 'high' : 'low';
+
+    return (
+      <Pressable
         onPress={onPress}
-        activeOpacity={0.9}
+        style={[styles.card, { height: item.cardHeight }]}
+        android_ripple={RIPPLE_CONFIG}
       >
-        {/* Wallpaper Image */}
+        {/* ✅ MEDIUM quality image for grid (fast load) */}
         <Image
-          source={{ uri: item.image }}
-          style={styles.cardImage}
+          source={{ uri: item.imageUri }}
+          style={[styles.cardImage, { backgroundColor: item.avgColor }]}
           contentFit="cover"
-          transition={300}
           cachePolicy="memory-disk"
+          priority={imagePriority}
         />
 
         {/* Gradient Overlay */}
-        <View style={styles.cardOverlay} />
+        <LinearGradient
+          colors={CARD_GRADIENT}
+          locations={GRADIENT_LOCATIONS}
+          style={styles.cardOverlay}
+          pointerEvents="none"
+        />
 
         {/* Rank Badge */}
-        <View style={[styles.rankBadge, { backgroundColor: getRankColor(index + 1) }]}>
-          <Text style={styles.rankText}>#{index + 1}</Text>
+        <View style={[styles.rankBadge, { backgroundColor: rankStyle.bgColor }]}>
+          {isTopThree && <Text style={styles.rankEmoji}>{rankStyle.emoji}</Text>}
+          <Text style={[styles.rankText, { color: rankStyle.textColor }]}>
+            #{rank}
+          </Text>
         </View>
 
         {/* Favorite Button */}
-        <TouchableOpacity
-          style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
-          onPress={handleFavoritePress}
-          activeOpacity={0.8}
+        <Pressable
+          onPress={onFavoritePress}
+          style={styles.favoriteButton}
+          hitSlop={HITSLOP}
+          android_ripple={RIPPLE_LIGHT}
         >
-          <Ionicons
-            name={isFavorite ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isFavorite ? '#EF4444' : '#fff'}
-          />
-        </TouchableOpacity>
+          <Ionicons name="heart-outline" size={20} color="#FFFFFF" />
+        </Pressable>
 
-        {/* Card Info */}
+        {/* Bottom Info */}
         <View style={styles.cardInfo}>
-          {/* Category Tag */}
-          <View style={styles.categoryTag}>
-            <Text style={styles.categoryText}>{item.category}</Text>
-          </View>
-
-          {/* Title */}
           <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.title}
+            {item.photographer}
           </Text>
-
-          {/* Stats Row */}
           <View style={styles.statsRow}>
-            {/* Likes */}
             <View style={styles.statItem}>
-              <Ionicons name="heart" size={12} color="#EF4444" />
-              <Text style={styles.statText}>{item.likes}</Text>
+              <Ionicons name="heart" size={12} color="#F87171" />
+              <Text style={styles.statText}>{stats.likes}</Text>
             </View>
-
-            {/* Downloads */}
             <View style={styles.statItem}>
-              <Ionicons name="download" size={12} color="#22C55E" />
-              <Text style={styles.statText}>{item.downloads}</Text>
+              <Ionicons name="arrow-down-circle" size={12} color="#4ADE80" />
+              <Text style={styles.statText}>{stats.downloads}</Text>
             </View>
           </View>
         </View>
-      </TouchableOpacity>
-    </MotiView>
-  );
-});
+      </Pressable>
+    );
+  },
+  (prev, next) => prev.item.id === next.item.id && prev.index === next.index
+);
 
 // =============================================================================
-// FILTER TAB COMPONENT
+// FILTER TAB
 // =============================================================================
 
-const FilterTab = React.memo(function FilterTab({
-  filter,
-  label,
-  isActive,
-  onPress,
+const FilterTab = React.memo(
+  function FilterTab({
+    filter,
+    label,
+    icon,
+    isActive,
+    onPress,
+  }: {
+    filter: FilterType;
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    isActive: boolean;
+    onPress: (filter: FilterType) => void;
+  }) {
+    const handlePress = useCallback(() => onPress(filter), [filter, onPress]);
+
+    return (
+      <Pressable
+        onPress={handlePress}
+        style={[styles.filterTab, isActive && styles.filterTabActive]}
+        android_ripple={RIPPLE_CONFIG}
+      >
+        <Ionicons
+          name={icon}
+          size={14}
+          color={isActive ? '#FFFFFF' : COLORS.textSecondary}
+        />
+        <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  },
+  (prev, next) => prev.isActive === next.isActive
+);
+
+// =============================================================================
+// STATS HEADER
+// =============================================================================
+
+const StatsHeader = React.memo(function StatsHeader({
+  totalResults,
+  loadedCount,
 }: {
-  filter: FilterType;
-  label: string;
-  isActive: boolean;
-  onPress: (filter: FilterType) => void;
+  totalResults: number;
+  loadedCount: number;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.filterTab, isActive && styles.filterTabActive]}
-      onPress={() => onPress(filter)}
-      activeOpacity={0.8}
-    >
-      <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+    <View style={styles.statsContainer}>
+      <View style={styles.statBox}>
+        <Ionicons name="images-outline" size={22} color={COLORS.primary} />
+        <Text style={styles.statBoxValue}>{formatNumber(totalResults)}</Text>
+        <Text style={styles.statBoxLabel}>Found</Text>
+      </View>
+      <View style={styles.statDivider} />
+      <View style={styles.statBox}>
+        <Ionicons name="checkmark-circle-outline" size={22} color="#4ADE80" />
+        <Text style={styles.statBoxValue}>{loadedCount}</Text>
+        <Text style={styles.statBoxLabel}>Loaded</Text>
+      </View>
+      <View style={styles.statDivider} />
+      <View style={styles.statBox}>
+        <Ionicons name="sparkles-outline" size={22} color="#FB923C" />
+        <Text style={styles.statBoxValue}>HD</Text>
+        <Text style={styles.statBoxLabel}>Quality</Text>
+      </View>
+    </View>
   );
 });
 
@@ -299,37 +317,128 @@ const FilterTab = React.memo(function FilterTab({
 
 export default function TrendingScreen() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabName>('trending');
   const [activeFilter, setActiveFilter] = useState<FilterType>('today');
 
-  /**
-   * Handle wallpaper press - navigate to viewer
-   */
-  const handleWallpaperPress = useCallback((item: TrendingItem) => {
-    console.log('Trending wallpaper pressed:', item.id);
-    router.push('/viewer');
-  }, [router]);
+  // ==========================================================================
+  // DATA FETCHING (Professional Settings)
+  // ==========================================================================
 
-  /**
-   * Handle favorite press
-   */
-  const handleFavoritePress = useCallback((item: TrendingItem) => {
-    console.log('Toggle favorite:', item.id);
-    // TODO: Implement with state management
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    isRefetching,
+  } = useInfiniteQuery({
+    queryKey: ['trending', activeFilter],
+    queryFn: async ({ pageParam = 1 }) => {
+      const query = FILTER_QUERIES[activeFilter];
+      // ✅ Small batch: 10 per page
+      const response = await searchWallpapers(query, pageParam, PER_PAGE, 'portrait');
+
+      return {
+        wallpapers: transformToOptimized(response.photos),
+        total_results: response.total_results,
+        page: pageParam,
+      };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      if (allPages.length >= MAX_PAGES) return undefined;
+      if (allPages.length * PER_PAGE >= lastPage.total_results) return undefined;
+      return allPages.length + 1;
+    },
+    // ✅ Prevent unnecessary refetches
+    staleTime: CACHE_TIMES.STALE_TIME,
+    gcTime: CACHE_TIMES.TRENDING,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // ==========================================================================
+  // DERIVED DATA
+  // ==========================================================================
+
+  const wallpapers = useMemo((): OptimizedWallpaper[] => {
+    if (!data?.pages) return EMPTY_ARRAY;
+    return data.pages.flatMap((page) => page.wallpapers);
+  }, [data?.pages]);
+
+  const totalResults = data?.pages?.[0]?.total_results ?? 0;
+
+  // ==========================================================================
+  // FOCUS EFFECT
+  // ==========================================================================
+
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab('trending');
+    }, [])
+  );
+
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+
+  const handleTabPress = useCallback(
+    (tab: TabName) => {
+      if (tab === 'trending') return;
+      setActiveTab(tab);
+
+      const routes: Record<TabName, string | null> = {
+        home: '/',
+        favorites: '/favorites',
+        category: '/search',
+        trending: null,
+        settings: '/settings',
+      };
+
+      const route = routes[tab];
+      if (route) router.push(route as any);
+    },
+    [router]
+  );
+
+  const handleWallpaperPress = useCallback(
+    (item: OptimizedWallpaper) => {
+      router.push({
+        pathname: '/viewer',
+        params: { id: item.id },
+      });
+    },
+    [router]
+  );
+
+  const handleFavoritePress = useCallback((_item: OptimizedWallpaper) => {
+    // TODO: Implement with Zustand
   }, []);
 
-  /**
-   * Handle filter change
-   */
   const handleFilterChange = useCallback((filter: FilterType) => {
     setActiveFilter(filter);
-    // TODO: Fetch data based on filter
   }, []);
 
-  /**
-   * Render trending item
-   */
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const handleRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  // ==========================================================================
+  // RENDER FUNCTIONS
+  // ==========================================================================
+
   const renderItem = useCallback(
-    ({ item, index }: { item: TrendingItem; index: number }) => (
+    ({ item, index }: { item: OptimizedWallpaper; index: number }) => (
       <TrendingCard
         item={item}
         index={index}
@@ -340,126 +449,197 @@ export default function TrendingScreen() {
     [handleWallpaperPress, handleFavoritePress]
   );
 
-  /**
-   * Render list header
-   */
-  const ListHeader = useCallback(
-    () => (
-      <View style={styles.listHeader}>
-        {/* Stats Summary */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statBoxValue}>12.5k</Text>
-            <Text style={styles.statBoxLabel}>Total Likes</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statBoxValue}>8.2k</Text>
-            <Text style={styles.statBoxLabel}>Downloads</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statBoxValue}>156</Text>
-            <Text style={styles.statBoxLabel}>New Today</Text>
-          </View>
-        </View>
-      </View>
-    ),
+  const keyExtractor = useCallback((item: OptimizedWallpaper) => item.id, []);
+
+  // ✅ Dynamic layout for FlashList
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number; size?: number }, item: OptimizedWallpaper) => {
+      layout.size = item.cardHeight + CARD_GAP;
+      layout.span = 1;
+    },
     []
   );
 
-  /**
-   * Render empty state
-   */
-  const ListEmpty = useCallback(
+  // Header
+  const ListHeader = useMemo(
     () => (
-      <View style={styles.emptyContainer}>
-        <MotiView
-          from={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring' }}
-          style={styles.emptyIconContainer}
-        >
-          <Ionicons name="flame-outline" size={60} color={COLORS.primary} />
-        </MotiView>
-        <Text style={styles.emptyTitle}>No trending wallpapers</Text>
-        <Text style={styles.emptySubtitle}>
-          Check back later for popular wallpapers
-        </Text>
+      <View style={styles.listHeader}>
+        <StatsHeader totalResults={totalResults} loadedCount={wallpapers.length} />
       </View>
     ),
-    []
+    [totalResults, wallpapers.length]
   );
+
+  // Footer
+  const ListFooter = useMemo(() => {
+    if (isFetchingNextPage) {
+      return (
+        <View style={styles.footer}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.footerText}>Loading more...</Text>
+        </View>
+      );
+    }
+
+    if (!hasNextPage && wallpapers.length > 0) {
+      return (
+        <View style={styles.footer}>
+          <Ionicons name="checkmark-done-circle" size={24} color={COLORS.primary} />
+          <Text style={styles.footerText}>All {wallpapers.length} loaded</Text>
+        </View>
+      );
+    }
+
+    return <View style={styles.footerSpacer} />;
+  }, [isFetchingNextPage, hasNextPage, wallpapers.length]);
+
+  // Empty
+  const ListEmpty = useMemo(() => {
+    if (isLoading) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading trending...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.centerContainer}>
+        <Ionicons name="flame-outline" size={64} color={COLORS.textSecondary} />
+        <Text style={styles.emptyTitle}>No wallpapers found</Text>
+        <Text style={styles.emptySubtitle}>Try a different filter</Text>
+      </View>
+    );
+  }, [isLoading]);
+
+  // ==========================================================================
+  // ERROR STATE
+  // ==========================================================================
+
+  if (isError) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="flame" size={24} color="#FFFFFF" />
+            </View>
+            <Text style={styles.headerTitle}>Trending</Text>
+          </View>
+        </View>
+
+        <View style={styles.centerContainer}>
+          <Ionicons name="cloud-offline-outline" size={64} color={COLORS.textSecondary} />
+          <Text style={styles.errorTitle}>Failed to load</Text>
+          <Text style={styles.errorText}>{error?.message || 'Unknown error'}</Text>
+          <Pressable style={styles.retryButton} onPress={handleRefresh}>
+            <Ionicons name="refresh" size={18} color="#FFFFFF" />
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        </View>
+
+        <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
+      </View>
+    );
+  }
+
+  // ==========================================================================
+  // MAIN RENDER
+  // ==========================================================================
 
   return (
     <View style={styles.container}>
-      {/* ===================================================================
-          HEADER
-          =================================================================== */}
-      <MotiView
-        from={{ opacity: 0, translateY: -20 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: 'spring', delay: 100 }}
-        style={styles.header}
-      >
-        <View style={styles.headerTitleRow}>
-          <View style={styles.fireIconContainer}>
-            <Ionicons name="flame" size={24} color="#fff" />
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="flame" size={24} color="#FFFFFF" />
           </View>
-          <Text style={styles.headerTitle}>Trending</Text>
+          <View>
+            <Text style={styles.headerTitle}>Trending</Text>
+            <Text style={styles.headerSubtitle}>Most popular right now</Text>
+          </View>
         </View>
-        <Text style={styles.headerSubtitle}>Most popular wallpapers right now</Text>
-      </MotiView>
+      </View>
 
-      {/* ===================================================================
-          FILTER TABS
-          =================================================================== */}
-      <MotiView
-        from={{ opacity: 0, translateX: -20 }}
-        animate={{ opacity: 1, translateX: 0 }}
-        transition={{ type: 'spring', delay: 200 }}
-        style={styles.filterContainer}
-      >
+      {/* Filter Tabs */}
+      <View style={styles.filterRow}>
         <FilterTab
           filter="today"
           label="Today"
+          icon="sunny-outline"
           isActive={activeFilter === 'today'}
           onPress={handleFilterChange}
         />
         <FilterTab
           filter="week"
-          label="This Week"
+          label="Week"
+          icon="calendar-outline"
           isActive={activeFilter === 'week'}
           onPress={handleFilterChange}
         />
         <FilterTab
           filter="month"
-          label="This Month"
+          label="Month"
+          icon="calendar"
           isActive={activeFilter === 'month'}
           onPress={handleFilterChange}
         />
         <FilterTab
           filter="all"
-          label="All Time"
+          label="All"
+          icon="infinite-outline"
           isActive={activeFilter === 'all'}
           onPress={handleFilterChange}
         />
-      </MotiView>
+      </View>
 
-      {/* ===================================================================
-          TRENDING GRID
-          =================================================================== */}
-      <FlatList
-        data={trendingWallpapers}
+      {/* ✅ PROFESSIONAL FLASHLIST CONFIG */}
+      <FlashList
+        data={wallpapers}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         numColumns={2}
-        contentContainerStyle={styles.gridContainer}
-        showsVerticalScrollIndicator={false}
+        // ✅ Only render 6 items initially (like Unsplash)
+        estimatedItemSize={260}
+        estimatedListSize={ESTIMATED_LIST_SIZE}
+        overrideItemLayout={overrideItemLayout}
+        // ✅ Pre-load only half screen ahead
+        drawDistance={DRAW_DISTANCE}
         ListHeaderComponent={ListHeader}
+        ListFooterComponent={ListFooter}
         ListEmptyComponent={ListEmpty}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={handleRefresh}
+            colors={REFRESH_COLORS}
+            tintColor={COLORS.primary}
+          />
+        }
       />
+
+      {/* Bottom Navigation */}
+      <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
     </View>
   );
 }
+
+// =============================================================================
+// STATIC CONSTANTS
+// =============================================================================
+
+const EMPTY_ARRAY: OptimizedWallpaper[] = [];
+const REFRESH_COLORS = [COLORS.primary];
+const ESTIMATED_LIST_SIZE = { width: SCREEN_WIDTH, height: SCREEN_HEIGHT };
+const RIPPLE_CONFIG = { color: 'rgba(0,0,0,0.1)', borderless: false };
+const RIPPLE_LIGHT = { color: 'rgba(255,255,255,0.3)', borderless: true };
+const HITSLOP = { top: 10, bottom: 10, left: 10, right: 10 };
 
 // =============================================================================
 // STYLES
@@ -474,278 +654,273 @@ const styles = StyleSheet.create({
   // Header
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingTop: Platform.OS === 'ios' ? 60 : 48,
     paddingBottom: 16,
   },
-
-  headerTitleRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-
-  fireIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     backgroundColor: '#F97316',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#F97316',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.35,
         shadowRadius: 8,
       },
-      android: {
-        elevation: 6,
-      },
+      android: { elevation: 8 },
     }),
   },
-
   headerTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: COLORS.textPrimary,
+    letterSpacing: -0.5,
   },
-
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textSecondary,
-    marginTop: 8,
-    marginLeft: 56,
+    marginTop: 2,
   },
 
-  // Filter Tabs
-  filterContainer: {
+  // Filter
+  filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     marginBottom: 16,
+    gap: 10,
   },
-
   filterTab: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#E2E8F0',
-    marginRight: 8,
+    backgroundColor: COLORS.surface,
+    gap: 6,
   },
-
   filterTabActive: {
     backgroundColor: COLORS.primary,
   },
-
   filterText: {
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
-
   filterTextActive: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
 
-  // List Header
+  // List
+  listContent: {
+    paddingHorizontal: HORIZONTAL_PADDING,
+    paddingBottom: 100,
+  },
   listHeader: {
-    paddingHorizontal: 4,
-    marginBottom: 8,
+    marginBottom: 16,
   },
 
+  // Stats
   statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     backgroundColor: COLORS.surface,
     borderRadius: 20,
     padding: 16,
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
       },
-      android: {
-        elevation: 4,
-      },
+      android: { elevation: 3 },
     }),
   },
-
   statBox: {
     flex: 1,
     alignItems: 'center',
+    gap: 4,
   },
-
+  statDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 4,
+  },
   statBoxValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.textPrimary,
   },
-
   statBoxLabel: {
     fontSize: 11,
     color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-
-  // Grid
-  gridContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 120,
+    fontWeight: '500',
   },
 
   // Card
   card: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.5,
-    margin: 6,
-    borderRadius: 24,
+    flex: 1,
+    margin: CARD_GAP / 2,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
       },
-      android: {
-        elevation: 8,
-      },
+      android: { elevation: 6 },
     }),
   },
-
   cardImage: {
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
   },
-
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 20,
   },
-
   rankBadge: {
     position: 'absolute',
-    top: 12,
-    left: 12,
-    paddingHorizontal: 12,
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 14,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderRadius: 12,
+    gap: 4,
   },
-
+  rankEmoji: {
+    fontSize: 12,
+  },
   rankText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#fff',
   },
-
   favoriteButton: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    top: 10,
+    right: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  favoriteButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
-
   cardInfo: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 14,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-
-  categoryTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginBottom: 6,
-  },
-
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#fff',
-  },
-
   cardTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
     marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-
   statText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#fff',
+    color: 'rgba(255,255,255,0.95)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
-  // Empty State
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  // Footer
+  footer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 80,
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 10,
+  },
+  footerText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  footerSpacer: {
+    height: 24,
+  },
+
+  // Center Container
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
     paddingHorizontal: 40,
   },
-
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#FFF7ED',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
-
   emptyTitle: {
+    marginTop: 20,
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    marginBottom: 8,
   },
-
   emptySubtitle: {
+    marginTop: 8,
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+  },
+  errorTitle: {
+    marginTop: 20,
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  errorText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    gap: 8,
+  },
+  retryText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

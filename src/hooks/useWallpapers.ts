@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * Wallpaper Hooks - With Portrait Orientation
+ * Wallpaper Hooks - Optimized with Higher Limits
  * =============================================================================
  */
 
@@ -10,12 +10,9 @@ import {
 } from '@tanstack/react-query';
 
 import {
-  fetchCuratedWallpapers,
-  fetchTrendingWallpapers,
-  fetchWallpapersByCategory,
+  searchWallpapers,
   fetchPhotoById,
   transformPhotosToWallpapers,
-  searchWallpapers,
 } from '../api/pexels';
 import { CACHE_TIMES } from '../constants/apiKeys';
 import { WallpaperItem } from '../types';
@@ -24,9 +21,10 @@ import { WallpaperItem } from '../types';
 // CONSTANTS
 // =============================================================================
 
-const MAX_PAGES = 5;
+const MAX_PAGES_HOME = 5;        // Home screen: 100 wallpapers (memory safe)
+const MAX_PAGES_SEARCH = 20;     // Search: 400 wallpapers (user requested more)
 const DEFAULT_PER_PAGE = 20;
-const DEFAULT_ORIENTATION = 'portrait'; // 👈 Vertical images only
+const DEFAULT_ORIENTATION = 'portrait';
 
 // =============================================================================
 // QUERY KEYS
@@ -37,18 +35,14 @@ export const wallpaperKeys = {
   curated: () => [...wallpaperKeys.all, 'curated'] as const,
   trending: () => [...wallpaperKeys.all, 'trending'] as const,
   category: (category: string) => [...wallpaperKeys.all, 'category', category] as const,
+  search: (query: string) => [...wallpaperKeys.all, 'search', query] as const,
   photo: (id: number) => [...wallpaperKeys.all, 'photo', id] as const,
 };
 
 // =============================================================================
-// CURATED WALLPAPERS (PORTRAIT ONLY)
+// CURATED WALLPAPERS (HOME SCREEN - Limited)
 // =============================================================================
 
-/**
- * Fetch curated wallpapers with pagination
- * Note: Curated endpoint doesn't support orientation filter
- * So we use search with popular terms instead
- */
 export const useCuratedWallpapers = (
   page: number = 1,
   perPage: number = DEFAULT_PER_PAGE
@@ -56,9 +50,8 @@ export const useCuratedWallpapers = (
   return useQuery({
     queryKey: [...wallpaperKeys.curated(), page, perPage],
     queryFn: async () => {
-      // Use search with 'wallpaper' query + portrait orientation
       const response = await searchWallpapers(
-        'wallpaper',
+        'nature wallpaper',
         page,
         perPage,
         DEFAULT_ORIENTATION
@@ -73,14 +66,10 @@ export const useCuratedWallpapers = (
   });
 };
 
-/**
- * Fetch curated wallpapers with infinite scroll (PORTRAIT ONLY)
- */
 export const useCuratedWallpapersInfinite = (perPage: number = DEFAULT_PER_PAGE) => {
   return useInfiniteQuery({
     queryKey: wallpaperKeys.curated(),
     queryFn: async ({ pageParam = 1 }) => {
-      // Use search with 'nature wallpaper' + portrait orientation
       const response = await searchWallpapers(
         'nature wallpaper',
         pageParam,
@@ -97,7 +86,8 @@ export const useCuratedWallpapersInfinite = (perPage: number = DEFAULT_PER_PAGE)
     getNextPageParam: (lastPage, allPages) => {
       const currentPageCount = allPages.length;
 
-      if (currentPageCount >= MAX_PAGES) {
+      // HOME SCREEN: Limited to 5 pages (100 wallpapers)
+      if (currentPageCount >= MAX_PAGES_HOME) {
         return undefined;
       }
 
@@ -113,7 +103,7 @@ export const useCuratedWallpapersInfinite = (perPage: number = DEFAULT_PER_PAGE)
 };
 
 // =============================================================================
-// TRENDING WALLPAPERS (PORTRAIT ONLY)
+// TRENDING WALLPAPERS (Limited)
 // =============================================================================
 
 export const useTrendingWallpapers = (
@@ -159,7 +149,7 @@ export const useTrendingWallpapersInfinite = (perPage: number = DEFAULT_PER_PAGE
     getNextPageParam: (lastPage, allPages) => {
       const currentPageCount = allPages.length;
 
-      if (currentPageCount >= MAX_PAGES) {
+      if (currentPageCount >= MAX_PAGES_HOME) {
         return undefined;
       }
 
@@ -175,7 +165,7 @@ export const useTrendingWallpapersInfinite = (perPage: number = DEFAULT_PER_PAGE
 };
 
 // =============================================================================
-// CATEGORY WALLPAPERS (PORTRAIT ONLY)
+// CATEGORY/SEARCH WALLPAPERS (Higher Limit for Search)
 // =============================================================================
 
 export const useCategoryWallpapers = (
@@ -190,7 +180,7 @@ export const useCategoryWallpapers = (
         category,
         page,
         perPage,
-        DEFAULT_ORIENTATION // 👈 Portrait only
+        DEFAULT_ORIENTATION
       );
       return {
         ...response,
@@ -203,6 +193,10 @@ export const useCategoryWallpapers = (
   });
 };
 
+/**
+ * Category/Search with HIGHER limit (400 wallpapers)
+ * Used for search screen where users want more results
+ */
 export const useCategoryWallpapersInfinite = (
   category: string,
   perPage: number = DEFAULT_PER_PAGE
@@ -214,7 +208,7 @@ export const useCategoryWallpapersInfinite = (
         category,
         pageParam,
         perPage,
-        DEFAULT_ORIENTATION // 👈 Portrait only
+        DEFAULT_ORIENTATION
       );
       return {
         ...response,
@@ -226,7 +220,8 @@ export const useCategoryWallpapersInfinite = (
     getNextPageParam: (lastPage, allPages) => {
       const currentPageCount = allPages.length;
 
-      if (currentPageCount >= MAX_PAGES) {
+      // SEARCH SCREEN: Higher limit (20 pages = 400 wallpapers)
+      if (currentPageCount >= MAX_PAGES_SEARCH) {
         return undefined;
       }
 
@@ -284,8 +279,8 @@ export const getLoadedPageCount = (
   return data.pages.length;
 };
 
-export const isMaxPagesReached = (
+export const getLoadedCount = (
   data: ReturnType<typeof useCuratedWallpapersInfinite>['data']
-): boolean => {
-  return getLoadedPageCount(data) >= MAX_PAGES;
+): number => {
+  return getFlattenedWallpapers(data).length;
 };

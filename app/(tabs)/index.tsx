@@ -181,12 +181,15 @@ export default function HomeScreen() {
   );
 
   const handleCategoryPress = useCallback(
-    (category: CategoryItem) => {
-      console.log('Category pressed:', category.id);
-      router.push({
-        pathname: '/search',
-        params: { category: category.title },
-      });
+    (id?: string | number) => {
+      console.log('Category pressed:', id);
+      const category = CATEGORIES.find((c) => c.id === id);
+      if (category) {
+        router.push({
+          pathname: '/search',
+          params: { category: category.title },
+        });
+      }
     },
     [router]
   );
