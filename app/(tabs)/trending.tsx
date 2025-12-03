@@ -1,16 +1,14 @@
 /**
  * =============================================================================
- * PRISMWALLS - Trending Screen (Professional Architecture)
+ * PRISMWALLS - Trending Screen (With Working Favorites)
  * =============================================================================
  *
- * Unsplash/Pinterest Style Loading:
- * - Load 6-8 images initially (not 40)
- * - Lazy load on scroll
- * - Small batches (10 per page)
- * - Medium quality for grid
- * - High quality only in viewer
- * - Minimal network usage
- * - Instant first paint
+ * Features:
+ * - Zustand favorites integration
+ * - FlashList for 120 FPS
+ * - Professional loading architecture
+ * - Working heart button
+ * - Unsplash/Pinterest style loading
  *
  * Author: PRISMWALLS Team
  * =============================================================================
@@ -41,13 +39,16 @@ import { BottomNavBar } from '@/src/components/navigation';
 // API
 import { searchWallpapers } from '@/src/api/pexels';
 
+// Store
+import { useFavoritesStore } from '@/src/store/useFavoritesStore';
+
 // Types & Constants
 import { COLORS } from '@/src/constants';
 import { CACHE_TIMES } from '@/src/constants/apiKeys';
 import { TabName } from '@/src/types';
 
 // =============================================================================
-// PROFESSIONAL LOADING CONSTANTS
+// CONSTANTS
 // =============================================================================
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -57,11 +58,10 @@ const CARD_WIDTH = Math.floor((SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_GAP)
 const MIN_CARD_HEIGHT = 200;
 const MAX_CARD_HEIGHT = 320;
 
-// ✅ PROFESSIONAL LOADING SETTINGS
-const PER_PAGE = 10;                          // Small batches (not 20)
-const INITIAL_RENDER = 6;                     // Only 6 cards on first paint
-const DRAW_DISTANCE = SCREEN_HEIGHT * 0.5;   // Pre-load only half screen ahead
-const MAX_PAGES = 30;                         // Allow more pages for infinite scroll
+// Professional loading settings
+const PER_PAGE = 10;
+const MAX_PAGES = 30;
+const DRAW_DISTANCE = SCREEN_HEIGHT * 0.5;
 
 // =============================================================================
 // FILTER QUERIES
@@ -100,13 +100,16 @@ const GRADIENT_LOCATIONS: [number, number, number] = [0, 0.5, 1];
 
 type FilterType = 'today' | 'week' | 'month' | 'all';
 
+// ✅ Updated type with all required fields for favorites
 interface OptimizedWallpaper {
   id: string;
-  imageUri: string;        // Medium quality for grid
-  fullImageUri: string;    // High quality for viewer
+  imageUri: string;
+  fullImageUri: string;
   photographer: string;
   cardHeight: number;
   avgColor: string;
+  width: number;
+  height: number;
 }
 
 // =============================================================================
@@ -121,13 +124,15 @@ function transformToOptimized(photos: any[]): OptimizedWallpaper[] {
 
     return {
       id: String(photo.id),
-      // ✅ MEDIUM for grid (fast loading, ~100KB)
+      // Medium for grid (fast loading)
       imageUri: photo.src?.medium || photo.src?.small || '',
-      // ✅ LARGE for viewer (high quality)
-      fullImageUri: photo.src?.large2x || photo.src?.large || '',
+      // Large for viewer/favorites
+      fullImageUri: photo.src?.large2x || photo.src?.large || photo.src?.medium || '',
       photographer: photo.photographer || 'Unknown',
       cardHeight,
       avgColor: photo.avg_color || '#E2E8F0',
+      width: photo.width || 1080,
+      height: photo.height || 1920,
     };
   });
 }
@@ -151,7 +156,7 @@ const RANK_STYLES: Record<number, { textColor: string; bgColor: string; emoji: s
 const DEFAULT_RANK = { textColor: '#FFFFFF', bgColor: COLORS.primary, emoji: '' };
 
 // =============================================================================
-// TRENDING CARD (Optimized)
+// TRENDING CARD (With Favorites)
 // =============================================================================
 
 const TrendingCard = React.memo(
@@ -160,18 +165,18 @@ const TrendingCard = React.memo(
     index,
     onPress,
     onFavoritePress,
+    isFavorite,
   }: {
     item: OptimizedWallpaper;
     index: number;
     onPress: () => void;
     onFavoritePress: () => void;
+    isFavorite: boolean;
   }) {
     const rank = index + 1;
     const stats = STATIC_STATS[index % 5];
     const rankStyle = RANK_STYLES[rank] || DEFAULT_RANK;
     const isTopThree = rank <= 3;
-
-    // ✅ PRIORITY: First 4 = high, rest = low
     const imagePriority = index < 4 ? 'high' : 'low';
 
     return (
@@ -180,7 +185,7 @@ const TrendingCard = React.memo(
         style={[styles.card, { height: item.cardHeight }]}
         android_ripple={RIPPLE_CONFIG}
       >
-        {/* ✅ MEDIUM quality image for grid (fast load) */}
+        {/* Image */}
         <Image
           source={{ uri: item.imageUri }}
           style={[styles.cardImage, { backgroundColor: item.avgColor }]}
@@ -205,14 +210,21 @@ const TrendingCard = React.memo(
           </Text>
         </View>
 
-        {/* Favorite Button */}
+        {/* ✅ Favorite Button - Connected to Store */}
         <Pressable
           onPress={onFavoritePress}
-          style={styles.favoriteButton}
+          style={[
+            styles.favoriteButton,
+            isFavorite && styles.favoriteButtonActive,
+          ]}
           hitSlop={HITSLOP}
           android_ripple={RIPPLE_LIGHT}
         >
-          <Ionicons name="heart-outline" size={20} color="#FFFFFF" />
+          <Ionicons
+            name={isFavorite ? 'heart' : 'heart-outline'}
+            size={20}
+            color={isFavorite ? '#EF4444' : '#FFFFFF'}
+          />
         </Pressable>
 
         {/* Bottom Info */}
@@ -234,7 +246,10 @@ const TrendingCard = React.memo(
       </Pressable>
     );
   },
-  (prev, next) => prev.item.id === next.item.id && prev.index === next.index
+  (prev, next) =>
+    prev.item.id === next.item.id &&
+    prev.index === next.index &&
+    prev.isFavorite === next.isFavorite
 );
 
 // =============================================================================
@@ -320,8 +335,17 @@ export default function TrendingScreen() {
   const [activeTab, setActiveTab] = useState<TabName>('trending');
   const [activeFilter, setActiveFilter] = useState<FilterType>('today');
 
+  // ✅ Zustand Favorites Store
+  const favorites = useFavoritesStore((state) => state.favorites);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+
+  // ✅ Create a Set for O(1) lookup of favorites
+  const favoriteIds = useMemo(() => {
+    return new Set(favorites.map((f) => f.id));
+  }, [favorites]);
+
   // ==========================================================================
-  // DATA FETCHING (Professional Settings)
+  // DATA FETCHING
   // ==========================================================================
 
   const {
@@ -338,7 +362,6 @@ export default function TrendingScreen() {
     queryKey: ['trending', activeFilter],
     queryFn: async ({ pageParam = 1 }) => {
       const query = FILTER_QUERIES[activeFilter];
-      // ✅ Small batch: 10 per page
       const response = await searchWallpapers(query, pageParam, PER_PAGE, 'portrait');
 
       return {
@@ -353,7 +376,6 @@ export default function TrendingScreen() {
       if (allPages.length * PER_PAGE >= lastPage.total_results) return undefined;
       return allPages.length + 1;
     },
-    // ✅ Prevent unnecessary refetches
     staleTime: CACHE_TIMES.STALE_TIME,
     gcTime: CACHE_TIMES.TRENDING,
     refetchOnMount: false,
@@ -415,9 +437,21 @@ export default function TrendingScreen() {
     [router]
   );
 
-  const handleFavoritePress = useCallback((_item: OptimizedWallpaper) => {
-    // TODO: Implement with Zustand
-  }, []);
+  // ✅ Working Favorite Handler
+  const handleFavoritePress = useCallback(
+    (item: OptimizedWallpaper) => {
+      toggleFavorite({
+        id: item.id,
+        imageUri: item.imageUri,
+        fullImageUri: item.fullImageUri,
+        photographer: item.photographer,
+        avgColor: item.avgColor,
+        width: item.width,
+        height: item.height,
+      });
+    },
+    [toggleFavorite]
+  );
 
   const handleFilterChange = useCallback((filter: FilterType) => {
     setActiveFilter(filter);
@@ -444,14 +478,14 @@ export default function TrendingScreen() {
         index={index}
         onPress={() => handleWallpaperPress(item)}
         onFavoritePress={() => handleFavoritePress(item)}
+        isFavorite={favoriteIds.has(item.id)}
       />
     ),
-    [handleWallpaperPress, handleFavoritePress]
+    [handleWallpaperPress, handleFavoritePress, favoriteIds]
   );
 
   const keyExtractor = useCallback((item: OptimizedWallpaper) => item.id, []);
 
-  // ✅ Dynamic layout for FlashList
   const overrideItemLayout = useCallback(
     (layout: { span?: number; size?: number }, item: OptimizedWallpaper) => {
       layout.size = item.cardHeight + CARD_GAP;
@@ -595,17 +629,15 @@ export default function TrendingScreen() {
         />
       </View>
 
-      {/* ✅ PROFESSIONAL FLASHLIST CONFIG */}
+      {/* FlashList with extraData for favorites */}
       <FlashList
         data={wallpapers}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         numColumns={2}
-        // ✅ Only render 6 items initially (like Unsplash)
         estimatedItemSize={260}
         estimatedListSize={ESTIMATED_LIST_SIZE}
         overrideItemLayout={overrideItemLayout}
-        // ✅ Pre-load only half screen ahead
         drawDistance={DRAW_DISTANCE}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
@@ -614,6 +646,7 @@ export default function TrendingScreen() {
         onEndReachedThreshold={0.3}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        extraData={favoriteIds}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -818,6 +851,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   cardInfo: {
     position: 'absolute',

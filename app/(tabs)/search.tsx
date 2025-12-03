@@ -1,16 +1,13 @@
 /**
  * =============================================================================
- * PRISMWALLS - Search Screen (Professional 120 FPS)
+ * PRISMWALLS - Search Screen (With Working Favorites)
  * =============================================================================
  *
- * Unsplash/Pinterest Style Architecture:
- * - Load 6-8 images initially (not 40)
- * - FlashList for 120 FPS scrolling
- * - Medium quality images for grid
- * - Lazy loading on scroll
- * - Small batches (10 per page)
- * - Zero inline styles
- * - Optimized re-renders
+ * Features:
+ * - Zustand favorites integration
+ * - FlashList for 120 FPS
+ * - Professional loading architecture
+ * - Working heart button
  *
  * Author: PRISMWALLS Team
  * =============================================================================
@@ -47,13 +44,16 @@ import { BottomNavBar } from '@/src/components/navigation';
 // API
 import { searchWallpapers } from '@/src/api/pexels';
 
+// Store
+import { useFavoritesStore } from '@/src/store/useFavoritesStore';
+
 // Types & Constants
 import { COLORS } from '@/src/constants';
 import { CACHE_TIMES } from '@/src/constants/apiKeys';
 import { TabName } from '@/src/types';
 
 // =============================================================================
-// PROFESSIONAL LOADING CONSTANTS
+// CONSTANTS
 // =============================================================================
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -63,11 +63,11 @@ const CARD_WIDTH = Math.floor((SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_GAP)
 const MIN_CARD_HEIGHT = 180;
 const MAX_CARD_HEIGHT = 300;
 
-// ✅ PROFESSIONAL LOADING SETTINGS
-const PER_PAGE = 10;                          // Small batches
-const MAX_PAGES = 30;                         // Allow more pages
-const DRAW_DISTANCE = SCREEN_HEIGHT * 0.5;   // Pre-load half screen ahead
-const DEBOUNCE_DELAY = 400;                   // Faster response
+// Professional loading settings
+const PER_PAGE = 10;
+const MAX_PAGES = 30;
+const DRAW_DISTANCE = SCREEN_HEIGHT * 0.5;
+const DEBOUNCE_DELAY = 400;
 
 // Storage
 const STORAGE_KEY = '@prismwalls_recent_searches';
@@ -103,7 +103,7 @@ const TRENDING_SEARCHES: ReadonlyArray<string> = [
   'Gradient',
 ] as const;
 
-// Gradient for cards
+// Gradient
 const CARD_GRADIENT: [string, string] = ['transparent', 'rgba(0,0,0,0.6)'];
 const GRADIENT_LOCATIONS: [number, number] = [0.5, 1];
 
@@ -119,31 +119,39 @@ type CategoryItem = {
   query: string;
 };
 
+// ✅ Updated type with all required fields for favorites
 interface OptimizedWallpaper {
   id: string;
   imageUri: string;
+  fullImageUri: string;
   photographer: string;
   cardHeight: number;
   avgColor: string;
+  width: number;
+  height: number;
 }
 
 // =============================================================================
-// TRANSFORM: Pre-calculate everything outside render
+// TRANSFORM: Pre-calculate everything
 // =============================================================================
 
 function transformToOptimized(photos: any[]): OptimizedWallpaper[] {
   return photos.map((photo) => {
-    const aspectRatio = photo.width / photo.height;
+    const aspectRatio = photo. width / photo.height;
     const calculatedHeight = Math.round(CARD_WIDTH / aspectRatio);
-    const cardHeight = Math.max(MIN_CARD_HEIGHT, Math.min(calculatedHeight, MAX_CARD_HEIGHT));
+    const cardHeight = Math.max(MIN_CARD_HEIGHT, Math. min(calculatedHeight, MAX_CARD_HEIGHT));
 
     return {
       id: String(photo.id),
-      // ✅ MEDIUM for grid (fast loading)
-      imageUri: photo.src?.medium || photo.src?.small || '',
+      // Medium for grid (fast loading)
+      imageUri: photo.src?. medium || photo.src?. small || '',
+      // Large for viewer/favorites
+      fullImageUri: photo.src?. large2x || photo.src?. large || photo.src?.medium || '',
       photographer: photo.photographer || 'Unknown',
       cardHeight,
-      avgColor: photo.avg_color || '#E2E8F0',
+      avgColor: photo. avg_color || '#E2E8F0',
+      width: photo.width || 1080,
+      height: photo.height || 1920,
     };
   });
 }
@@ -176,29 +184,29 @@ function useRecentSearches() {
 
   const loadRecentSearches = async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const stored = await AsyncStorage. getItem(STORAGE_KEY);
       if (stored) setRecentSearches(JSON.parse(stored));
     } catch {}
   };
 
   const addRecentSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
-    if (!trimmed) return;
+    if (! trimmed) return;
 
     setRecentSearches((prev) => {
       const updated = [
         trimmed,
-        ...prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase()),
+        ... prev.filter((item) => item. toLowerCase() !== trimmed. toLowerCase()),
       ].slice(0, MAX_RECENT_SEARCHES);
-      
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)). catch(() => {});
       return updated;
     });
   }, []);
 
   const clearRecentSearches = useCallback(async () => {
     setRecentSearches([]);
-    await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+    await AsyncStorage.removeItem(STORAGE_KEY). catch(() => {});
   }, []);
 
   const removeRecentSearch = useCallback(async (query: string) => {
@@ -213,7 +221,7 @@ function useRecentSearches() {
 }
 
 // =============================================================================
-// RESULT CARD COMPONENT (Optimized)
+// RESULT CARD COMPONENT (With Favorites)
 // =============================================================================
 
 const ResultCard = React.memo(
@@ -222,13 +230,14 @@ const ResultCard = React.memo(
     index,
     onPress,
     onFavorite,
+    isFavorite,
   }: {
     item: OptimizedWallpaper;
     index: number;
     onPress: () => void;
     onFavorite: () => void;
+    isFavorite: boolean;
   }) {
-    // ✅ Priority: First 4 = high, rest = low
     const imagePriority = index < 4 ? 'high' : 'low';
 
     return (
@@ -237,7 +246,7 @@ const ResultCard = React.memo(
         style={[styles.resultCard, { height: item.cardHeight }]}
         android_ripple={RIPPLE_CONFIG}
       >
-        {/* ✅ Medium quality image (fast load) */}
+        {/* Image */}
         <Image
           source={{ uri: item.imageUri }}
           style={[styles.resultImage, { backgroundColor: item.avgColor }]}
@@ -256,24 +265,34 @@ const ResultCard = React.memo(
 
         {/* Photographer Name */}
         <View style={styles.cardInfo}>
-          <Text style={styles.photographerName} numberOfLines={1}>
-            {item.photographer}
+          <Text style={styles. photographerName} numberOfLines={1}>
+            {item. photographer}
           </Text>
         </View>
 
-        {/* Favorite Button */}
+        {/* ✅ Favorite Button - Connected to Store */}
         <Pressable
           onPress={onFavorite}
-          style={styles.favoriteButton}
+          style={[
+            styles.favoriteButton,
+            isFavorite && styles.favoriteButtonActive,
+          ]}
           hitSlop={HITSLOP}
           android_ripple={RIPPLE_LIGHT}
         >
-          <Ionicons name="heart-outline" size={18} color="#FFFFFF" />
+          <Ionicons
+            name={isFavorite ? 'heart' : 'heart-outline'}
+            size={18}
+            color={isFavorite ?  '#EF4444' : '#FFFFFF'}
+          />
         </Pressable>
       </Pressable>
     );
   },
-  (prev, next) => prev.item.id === next.item.id && prev.index === next.index
+  (prev, next) =>
+    prev.item.id === next.item.id &&
+    prev.index === next.index &&
+    prev.isFavorite === next.isFavorite
 );
 
 // =============================================================================
@@ -295,10 +314,10 @@ const CategoryCard = React.memo(
         android_ripple={RIPPLE_CONFIG}
       >
         <View style={[styles.categoryIcon, { backgroundColor: item.color }]}>
-          <Ionicons name={item.icon} size={24} color="#FFFFFF" />
+          <Ionicons name={item. icon} size={24} color="#FFFFFF" />
         </View>
         <Text style={styles.categoryName} numberOfLines={1}>
-          {item.name}
+          {item. name}
         </Text>
       </Pressable>
     );
@@ -327,11 +346,15 @@ export default function SearchScreen() {
     removeRecentSearch,
   } = useRecentSearches();
 
+  // ✅ Zustand Favorites Store
+  const favorites = useFavoritesStore((state) => state.favorites);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+
   // Is searching
   const isSearching = activeSearchQuery.length > 0;
 
   // ==========================================================================
-  // DATA FETCHING (Professional Settings)
+  // DATA FETCHING
   // ==========================================================================
 
   const {
@@ -362,7 +385,7 @@ export default function SearchScreen() {
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       if (allPages.length >= MAX_PAGES) return undefined;
-      if (allPages.length * PER_PAGE >= lastPage.total_results) return undefined;
+      if (allPages. length * PER_PAGE >= lastPage. total_results) return undefined;
       return allPages.length + 1;
     },
     enabled: activeSearchQuery.length >= 2,
@@ -375,21 +398,26 @@ export default function SearchScreen() {
 
   // Flattened wallpapers
   const wallpapers = useMemo((): OptimizedWallpaper[] => {
-    if (!data?.pages) return EMPTY_ARRAY;
+    if (!data?. pages) return EMPTY_ARRAY;
     return data.pages.flatMap((page) => page.wallpapers);
   }, [data?.pages]);
 
   const totalResults = data?.pages?.[0]?.total_results ?? 0;
+
+  // ✅ Create a Set for O(1) lookup of favorites
+  const favoriteIds = useMemo(() => {
+    return new Set(favorites.map((f) => f.id));
+  }, [favorites]);
 
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
 
   useEffect(() => {
-    if (debouncedQuery.trim().length >= 2) {
-      setActiveSearchQuery(debouncedQuery.trim());
-      addRecentSearch(debouncedQuery.trim());
-    } else if (debouncedQuery.length === 0) {
+    if (debouncedQuery. trim(). length >= 2) {
+      setActiveSearchQuery(debouncedQuery. trim());
+      addRecentSearch(debouncedQuery. trim());
+    } else if (debouncedQuery. length === 0) {
       setActiveSearchQuery('');
     }
   }, [debouncedQuery, addRecentSearch]);
@@ -456,8 +484,8 @@ export default function SearchScreen() {
   const handleCategoryPress = useCallback(
     (category: CategoryItem) => {
       setSearchQuery(category.name);
-      setActiveSearchQuery(category.query);
-      addRecentSearch(category.name);
+      setActiveSearchQuery(category. query);
+      addRecentSearch(category. name);
       Keyboard.dismiss();
     },
     [addRecentSearch]
@@ -467,15 +495,27 @@ export default function SearchScreen() {
     (item: OptimizedWallpaper) => {
       router.push({
         pathname: '/viewer',
-        params: { id: item.id },
+        params: { id: item. id },
       });
     },
     [router]
   );
 
-  const handleFavoritePress = useCallback((_item: OptimizedWallpaper) => {
-    // TODO: Implement with Zustand
-  }, []);
+  // ✅ Working Favorite Handler
+  const handleFavoritePress = useCallback(
+    (item: OptimizedWallpaper) => {
+      toggleFavorite({
+        id: item.id,
+        imageUri: item.imageUri,
+        fullImageUri: item. fullImageUri,
+        photographer: item. photographer,
+        avgColor: item.avgColor,
+        width: item.width,
+        height: item.height,
+      });
+    },
+    [toggleFavorite]
+  );
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -488,7 +528,7 @@ export default function SearchScreen() {
   }, [refetch]);
 
   const handleSubmitSearch = useCallback(() => {
-    if (searchQuery.trim().length >= 2) {
+    if (searchQuery. trim().length >= 2) {
       setActiveSearchQuery(searchQuery.trim());
       addRecentSearch(searchQuery.trim());
       Keyboard.dismiss();
@@ -506,9 +546,10 @@ export default function SearchScreen() {
         index={index}
         onPress={() => handleWallpaperPress(item)}
         onFavorite={() => handleFavoritePress(item)}
+        isFavorite={favoriteIds. has(item.id)}
       />
     ),
-    [handleWallpaperPress, handleFavoritePress]
+    [handleWallpaperPress, handleFavoritePress, favoriteIds]
   );
 
   const keyExtractor = useCallback((item: OptimizedWallpaper) => item.id, []);
@@ -516,7 +557,7 @@ export default function SearchScreen() {
   const overrideItemLayout = useCallback(
     (layout: { span?: number; size?: number }, item: OptimizedWallpaper) => {
       layout.size = item.cardHeight + CARD_GAP;
-      layout.span = 1;
+      layout. span = 1;
     },
     []
   );
@@ -533,7 +574,7 @@ export default function SearchScreen() {
     () => (
       <View style={styles.resultsHeader}>
         <Text style={styles.resultsText}>
-          {totalResults > 0 ? `${totalResults.toLocaleString()} results` : 'Searching...'}
+          {totalResults > 0 ?  `${totalResults. toLocaleString()} results` : 'Searching...'}
         </Text>
       </View>
     ),
@@ -546,12 +587,12 @@ export default function SearchScreen() {
       return (
         <View style={styles.footer}>
           <ActivityIndicator size="small" color={COLORS.primary} />
-          <Text style={styles.footerText}>Loading more...</Text>
+          <Text style={styles. footerText}>Loading more...</Text>
         </View>
       );
     }
 
-    if (!hasNextPage && wallpapers.length > 0) {
+    if (! hasNextPage && wallpapers.length > 0) {
       return (
         <View style={styles.footer}>
           <Ionicons name="checkmark-done-circle" size={20} color={COLORS.primary} />
@@ -560,14 +601,14 @@ export default function SearchScreen() {
       );
     }
 
-    return <View style={styles.footerSpacer} />;
+    return <View style={styles. footerSpacer} />;
   }, [isFetchingNextPage, hasNextPage, wallpapers.length]);
 
   // Empty Component
   const ListEmpty = useMemo(() => {
     if (isLoading) {
       return (
-        <View style={styles.centerContainer}>
+        <View style={styles. centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Searching...</Text>
         </View>
@@ -580,7 +621,7 @@ export default function SearchScreen() {
           <Ionicons name="search-outline" size={50} color={COLORS.primary} />
         </View>
         <Text style={styles.emptyTitle}>No results found</Text>
-        <Text style={styles.emptySubtitle}>Try different keywords</Text>
+        <Text style={styles. emptySubtitle}>Try different keywords</Text>
       </View>
     );
   }, [isLoading]);
@@ -609,7 +650,7 @@ export default function SearchScreen() {
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      <View style={styles. searchContainer}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#94A3B8" />
           <TextInput
@@ -623,7 +664,7 @@ export default function SearchScreen() {
             autoCorrect={false}
             returnKeyType="search"
           />
-          {searchQuery.length > 0 && (
+          {searchQuery. length > 0 && (
             <Pressable onPress={handleClearSearch} hitSlop={HITSLOP}>
               <Ionicons name="close-circle" size={20} color="#94A3B8" />
             </Pressable>
@@ -632,7 +673,7 @@ export default function SearchScreen() {
       </View>
 
       {/* Content */}
-      {!isSearching ? (
+      {! isSearching ?  (
         // Browse Mode
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -648,7 +689,7 @@ export default function SearchScreen() {
                   <Text style={styles.clearText}>Clear</Text>
                 </Pressable>
               </View>
-              {recentSearches.slice(0, 5).map((item, index) => (
+              {recentSearches. slice(0, 5).map((item, index) => (
                 <Pressable
                   key={`recent-${index}`}
                   style={styles.recentItem}
@@ -671,7 +712,7 @@ export default function SearchScreen() {
           )}
 
           {/* Trending Searches */}
-          <View style={styles.section}>
+          <View style={styles. section}>
             <Text style={styles.sectionTitle}>Trending</Text>
             <View style={styles.tagsContainer}>
               {TRENDING_SEARCHES.map((item, index) => (
@@ -682,7 +723,7 @@ export default function SearchScreen() {
                   android_ripple={RIPPLE_CONFIG}
                 >
                   <Ionicons name="trending-up" size={14} color={COLORS.primary} />
-                  <Text style={styles.tagText}>{item}</Text>
+                  <Text style={styles. tagText}>{item}</Text>
                 </Pressable>
               ))}
             </View>
@@ -694,7 +735,7 @@ export default function SearchScreen() {
             <FlatList
               data={CATEGORIES as CategoryItem[]}
               renderItem={renderCategoryItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item. id}
               numColumns={4}
               scrollEnabled={false}
               contentContainerStyle={styles.categoriesGrid}
@@ -714,7 +755,6 @@ export default function SearchScreen() {
               </Pressable>
             </View>
           ) : (
-            // ✅ PROFESSIONAL FLASHLIST
             <FlashList
               data={wallpapers}
               renderItem={renderResultItem}
@@ -731,6 +771,7 @@ export default function SearchScreen() {
               onEndReachedThreshold={0.3}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.resultsGrid}
+              extraData={favoriteIds}
               refreshControl={
                 <RefreshControl
                   refreshing={isRefetching}
@@ -1009,6 +1050,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
 
   // Footer

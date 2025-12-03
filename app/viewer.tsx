@@ -1,15 +1,17 @@
 /**
  * =============================================================================
- * Wallpaper Viewer Screen - Full Preview (Expo SDK 54)
+ * PRISMWALLS - Wallpaper Viewer Screen (Reliable Set Wallpaper)
  * =============================================================================
  *
- * Full screen wallpaper preview with:
- * - High resolution image
+ * Features:
+ * - High Quality setting integration
+ * - Save to Gallery setting integration
+ * - Working Favorites (Zustand)
+ * - Download & Share
+ * - SET WALLPAPER - Opens Android Picker
  * - Pinch to zoom
- * - Download button (new File API)
- * - Share button
- * - Photographer credit
  *
+ * Author: Shotlin Team
  * =============================================================================
  */
 
@@ -17,12 +19,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
-import { File, Paths } from 'expo-file-system/next';
+import * as FileSystem from 'expo-file-system/legacy';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
-import React, { useCallback, useState } from 'react';
+import * as IntentLauncher from 'expo-intent-launcher';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -49,6 +52,14 @@ import Animated, {
 import { COLORS } from '@/src/constants';
 import { usePhoto } from '@/src/hooks';
 
+// Stores
+import { useFavoritesStore } from '@/src/store/useFavoritesStore';
+import {
+  useSettingsStore,
+  selectHighQuality,
+  selectSaveToGallery,
+} from '@/src/store/useSettingsStore';
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -60,7 +71,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // =============================================================================
 
 type ActionButtonProps = {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: keyof typeof Ionicons. glyphMap;
   label: string;
   onPress: () => void;
   loading?: boolean;
@@ -73,47 +84,23 @@ type ActionButtonProps = {
 const isExpoGo = Constants.appOwnership === 'expo';
 
 // =============================================================================
-// HELPER: Download file using new File API
+// HELPER: Download file
 // =============================================================================
 
-async function downloadFile(url: string, filename: string): Promise<File | null> {
+async function downloadFile(url: string, filename: string): Promise<string | null> {
   try {
-    const destinationFile = new File(Paths.cache, filename);
-    
-    // Fetch the image
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status}`);
+    const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+    const downloadResult = await FileSystem. downloadAsync(url, fileUri);
+
+    if (downloadResult.status === 200) {
+      return downloadResult.uri;
     }
-    
-    // Get blob and convert to base64
-    const blob = await response.blob();
-    const base64 = await blobToBase64(blob);
-    
-    // Write to file
-    await destinationFile.write(base64, { encoding: 'base64' });
-    
-    return destinationFile;
+
+    throw new Error(`Download failed with status: ${downloadResult.status}`);
   } catch (error) {
     console.error('Download error:', error);
     return null;
   }
-}
-
-// Helper: Convert blob to base64
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      // Remove data URL prefix
-      const base64 = base64String.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 // =============================================================================
@@ -130,7 +117,7 @@ const ActionButton = ({ icon, label, onPress, loading }: ActionButtonProps) => (
     disabled={loading}
   >
     <View style={styles.actionIconContainer}>
-      {loading ? (
+      {loading ?  (
         <ActivityIndicator size="small" color="#fff" />
       ) : (
         <Ionicons name={icon} size={24} color="#fff" />
@@ -147,15 +134,29 @@ const ActionButton = ({ icon, label, onPress, loading }: ActionButtonProps) => (
 export default function ViewerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
-  const photoId = params.id ? parseInt(params.id, 10) : 0;
+  const photoId = params. id ?  parseInt(params.id, 10) : 0;
 
   // State
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [isSettingWallpaper, setIsSettingWallpaper] = useState(false);
   const [showControls, setShowControls] = useState(true);
+
+  // Favorites Store
+  const favorites = useFavoritesStore((state) => state. favorites);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+
+  // Settings Store
+  const highQuality = useSettingsStore(selectHighQuality);
+  const saveToGallery = useSettingsStore(selectSaveToGallery);
 
   // Fetch photo data
   const { data: photo, isLoading, isError } = usePhoto(photoId);
+
+  // Check if current photo is favorited
+  const isFavorite = useMemo(() => {
+    return favorites. some((f) => f.id === String(photoId));
+  }, [favorites, photoId]);
 
   // Animated values for pinch zoom
   const scale = useSharedValue(1);
@@ -165,16 +166,21 @@ export default function ViewerScreen() {
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
-  // Get image URLs
-  const previewUrl = photo?.src?.large2x || photo?.src?.large || photo?.src?.original || '';
-  const downloadUrl = photo?.src?.original || photo?.src?.large2x || '';
+  // Get image URLs based on settings
+  const previewUrl =
+    photo?. src?. large2x || photo?.src?.large || photo?.src?. original || '';
+
+  const downloadUrl = highQuality
+    ?  photo?.src?.original || photo?.src?.large2x || ''
+    : photo?.src?.large || photo?.src?.medium || '';
+
   const placeholderColor = photo?.avg_color || '#1a1a2e';
 
   // ==========================================================================
   // GESTURES
   // ==========================================================================
 
-  const pinchGesture = Gesture.Pinch()
+  const pinchGesture = Gesture. Pinch()
     .onUpdate((event) => {
       scale.value = savedScale.value * event.scale;
     })
@@ -185,7 +191,7 @@ export default function ViewerScreen() {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
+        savedTranslateY. value = 0;
       } else if (scale.value > 4) {
         scale.value = withSpring(4);
         savedScale.value = 4;
@@ -197,8 +203,8 @@ export default function ViewerScreen() {
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
       if (scale.value > 1) {
-        translateX.value = savedTranslateX.value + event.translationX;
-        translateY.value = savedTranslateY.value + event.translationY;
+        translateX.value = savedTranslateX. value + event.translationX;
+        translateY.value = savedTranslateY.value + event. translationY;
       }
     })
     .onEnd(() => {
@@ -206,7 +212,7 @@ export default function ViewerScreen() {
       savedTranslateY.value = translateY.value;
     });
 
-  const doubleTapGesture = Gesture.Tap()
+  const doubleTapGesture = Gesture. Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
@@ -222,22 +228,21 @@ export default function ViewerScreen() {
       }
     });
 
-  const singleTapGesture = Gesture.Tap()
-    .onEnd(() => {
-      runOnJS(setShowControls)(!showControls);
-    });
+  const singleTapGesture = Gesture. Tap(). onEnd(() => {
+    runOnJS(setShowControls)(! showControls);
+  });
 
-  const composedGestures = Gesture.Simultaneous(
+  const composedGestures = Gesture. Simultaneous(
     pinchGesture,
     panGesture,
-    Gesture.Exclusive(doubleTapGesture, singleTapGesture)
+    Gesture. Exclusive(doubleTapGesture, singleTapGesture)
   );
 
   const animatedImageStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: scale.value },
       { translateX: translateX.value },
-      { translateY: translateY.value },
+      { translateY: translateY. value },
     ],
   }));
 
@@ -246,13 +251,13 @@ export default function ViewerScreen() {
   // ==========================================================================
 
   const handleClose = useCallback(() => {
-    router.back();
+    router. back();
   }, [router]);
 
+  // Download
   const handleDownload = useCallback(async () => {
     if (!downloadUrl) return;
 
-    // Check if running in Expo Go
     if (isExpoGo) {
       Alert.alert(
         'Development Build Required',
@@ -265,21 +270,38 @@ export default function ViewerScreen() {
     try {
       setIsDownloading(true);
 
-      // Request permission
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant permission to save images.');
-        return;
+      if (saveToGallery) {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permission Required',
+            'Please grant permission to save images.'
+          );
+          return;
+        }
       }
 
-      // Download file
-      const filename = `wallpaper_${photoId}_${Date.now()}.jpg`;
-      const file = await downloadFile(downloadUrl, filename);
+      const qualityLabel = highQuality ?  'hq' : 'std';
+      const filename = `wallpaper_${photoId}_${qualityLabel}_${Date.now()}.jpg`;
+      const fileUri = await downloadFile(downloadUrl, filename);
 
-      if (file) {
-        // Save to gallery
-        await MediaLibrary.saveToLibraryAsync(file.uri);
-        Alert.alert('Success', 'Wallpaper saved to gallery!');
+      if (fileUri) {
+        if (saveToGallery) {
+          await MediaLibrary.saveToLibraryAsync(fileUri);
+          Alert.alert(
+            'Success!  ✓',
+            `Wallpaper saved to gallery!\n\nQuality: ${
+              highQuality ?  'Original (HD)' : 'Standard'
+            }`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Downloaded!  ✓',
+            'Wallpaper downloaded to app cache.',
+            [{ text: 'OK' }]
+          );
+        }
       } else {
         throw new Error('Download failed');
       }
@@ -289,12 +311,12 @@ export default function ViewerScreen() {
     } finally {
       setIsDownloading(false);
     }
-  }, [downloadUrl, photoId]);
+  }, [downloadUrl, photoId, highQuality, saveToGallery]);
 
+  // Share
   const handleShare = useCallback(async () => {
     if (!downloadUrl) return;
 
-    // Check if running in Expo Go
     if (isExpoGo) {
       Alert.alert(
         'Development Build Required',
@@ -307,11 +329,11 @@ export default function ViewerScreen() {
     try {
       setIsSharing(true);
 
-      const filename = `wallpaper_${photoId}.jpg`;
-      const file = await downloadFile(downloadUrl, filename);
+      const filename = `wallpaper_${photoId}. jpg`;
+      const fileUri = await downloadFile(downloadUrl, filename);
 
-      if (file) {
-        await Sharing.shareAsync(file.uri);
+      if (fileUri) {
+        await Sharing.shareAsync(fileUri);
       } else {
         throw new Error('Download failed');
       }
@@ -323,9 +345,94 @@ export default function ViewerScreen() {
     }
   }, [downloadUrl, photoId]);
 
+  // ✅ SET WALLPAPER - Reliable Method
+  const handleSetWallpaper = useCallback(async () => {
+    if (!downloadUrl) return;
+
+    // iOS doesn't support setting wallpaper programmatically
+    if (Platform.OS === 'ios') {
+      Alert.alert(
+        'iOS Limitation',
+        "iOS doesn't allow apps to set wallpaper directly.\n\nPlease download the image and set it manually from Photos.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Download', onPress: handleDownload },
+        ]
+      );
+      return;
+    }
+
+    if (isExpoGo) {
+      Alert.alert(
+        'Development Build Required',
+        'Set Wallpaper feature requires a development build.\n\nRun: npx expo run:android',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setIsSettingWallpaper(true);
+
+      // Step 1: Request permission
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please grant permission to save images.'
+        );
+        return;
+      }
+
+      // Step 2: Download the image
+      const filename = `PrismWalls_${photoId}_${Date.now()}. jpg`;
+      const fileUri = await downloadFile(downloadUrl, filename);
+
+      if (! fileUri) {
+        throw new Error('Failed to download image');
+      }
+
+      // Step 3: Save to gallery
+      await MediaLibrary.saveToLibraryAsync(fileUri);
+
+      // Step 4: Open Android Wallpaper Settings
+      await IntentLauncher.startActivityAsync(
+        IntentLauncher.ActivityAction.WALLPAPER_SETTINGS
+      );
+
+      // Step 5: Show instructions
+      Alert.alert(
+        'Set Wallpaper 🖼️',
+        'Image saved to gallery!\n\nNow:\n1.  Tap "My photos" or "Gallery"\n2. Select the latest image\n3. Choose Home/Lock/Both\n4. Done! ',
+        [{ text: 'Got it!' }]
+      );
+    } catch (error) {
+      console.error('Set wallpaper error:', error);
+      Alert.alert(
+        'Image Saved! ',
+        'Wallpaper saved to gallery.\n\nTo set manually:\n1. Open Gallery\n2. Find the image\n3. Tap ⋮ → "Set as wallpaper"',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSettingWallpaper(false);
+    }
+  }, [downloadUrl, photoId, handleDownload]);
+
+  // Favorite Handler
   const handleFavorite = useCallback(() => {
-    Alert.alert('Added to Favorites', 'Wallpaper added to your favorites!');
-  }, []);
+    if (!photo) return;
+
+    toggleFavorite({
+      id: String(photo.id),
+      imageUri: photo.src?. medium || photo.src?.small || '',
+      fullImageUri:
+        photo.src?.large2x || photo.src?.large || photo. src?.original || '',
+      photographer: photo.photographer || 'Unknown',
+      avgColor: photo.avg_color || '#E2E8F0',
+      width: photo.width || 1080,
+      height: photo.height || 1920,
+    });
+  }, [photo, toggleFavorite]);
 
   // ==========================================================================
   // LOADING STATE
@@ -350,9 +457,9 @@ export default function ViewerScreen() {
       <View style={[styles.container, styles.centerContent]}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
         <Ionicons name="image-outline" size={64} color="#666" />
-        <Text style={styles.errorText}>Failed to load wallpaper</Text>
+        <Text style={styles. errorText}>Failed to load wallpaper</Text>
         <Pressable onPress={handleClose} style={styles.errorButton}>
-          <Text style={styles.errorButtonText}>Go Back</Text>
+          <Text style={styles. errorButtonText}>Go Back</Text>
         </Pressable>
       </View>
     );
@@ -363,7 +470,7 @@ export default function ViewerScreen() {
   // ==========================================================================
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView style={styles. container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
 
       {/* Background Color */}
@@ -400,10 +507,15 @@ export default function ViewerScreen() {
               onPress={handleFavorite}
               style={({ pressed }) => [
                 styles.favoriteButton,
-                { opacity: pressed ? 0.7 : 1 },
+                isFavorite && styles.favoriteButtonActive,
+                { opacity: pressed ?  0.7 : 1 },
               ]}
             >
-              <Ionicons name="heart-outline" size={26} color="#fff" />
+              <Ionicons
+                name={isFavorite ? 'heart' : 'heart-outline'}
+                size={26}
+                color={isFavorite ?  '#EF4444' : '#fff'}
+              />
             </Pressable>
           </BlurView>
         </View>
@@ -417,12 +529,24 @@ export default function ViewerScreen() {
             style={styles.gradient}
           >
             {/* Photographer Info */}
-            {photo.photographer && (
+            {photo. photographer && (
               <View style={styles.photographerInfo}>
                 <Ionicons name="camera-outline" size={16} color="#fff" />
                 <Text style={styles.photographerName}>{photo.photographer}</Text>
               </View>
             )}
+
+            {/* Quality Badge */}
+            <View style={styles. qualityBadge}>
+              <Ionicons
+                name={highQuality ? 'sparkles' : 'image'}
+                size={12}
+                color="#fff"
+              />
+              <Text style={styles.qualityText}>
+                {highQuality ? 'Original Quality' : 'Standard Quality'}
+              </Text>
+            </View>
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
@@ -441,9 +565,8 @@ export default function ViewerScreen() {
               <ActionButton
                 icon="phone-portrait-outline"
                 label="Set Wallpaper"
-                onPress={() =>
-                  Alert.alert('Info', 'Download first, then set from gallery.')
-                }
+                onPress={handleSetWallpaper}
+                loading={isSettingWallpaper}
               />
             </View>
           </LinearGradient>
@@ -467,7 +590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   background: {
-    ...StyleSheet.absoluteFillObject,
+    ... StyleSheet.absoluteFillObject,
   },
 
   // Image
@@ -514,6 +637,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  favoriteButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
 
   // Bottom Controls
   bottomControls: {
@@ -533,13 +659,31 @@ const styles = StyleSheet.create({
   photographerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 8,
     gap: 8,
   },
   photographerName: {
     fontSize: 14,
     color: '#fff',
     fontWeight: '500',
+  },
+
+  // Quality Badge
+  qualityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    gap: 6,
+  },
+  qualityText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '600',
   },
 
   // Action Buttons
