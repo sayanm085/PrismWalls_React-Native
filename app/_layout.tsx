@@ -96,7 +96,7 @@ export default function RootLayout() {
           </Stack>
 
           {/* Animated Splash Screen Overlay */}
-          {! splashAnimationComplete && (
+          {!splashAnimationComplete && (
             <AnimatedSplashScreen
               onAnimationComplete={handleSplashAnimationComplete}
             />
@@ -107,7 +107,7 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet. create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
   },

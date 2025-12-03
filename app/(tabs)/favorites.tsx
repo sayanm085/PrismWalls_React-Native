@@ -414,7 +414,7 @@ export default function FavoritesScreen() {
             favorites.length === 0 && styles.headerButtonDisabled,
           ]}
           onPress={handleClearAll}
-          android_ripple={favorites.length > 0 ?  RIPPLE_CONFIG : undefined}
+          android_ripple={favorites.length > 0 ? RIPPLE_CONFIG : undefined}
           disabled={favorites.length === 0}
         >
           <Ionicons

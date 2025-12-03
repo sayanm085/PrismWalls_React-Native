@@ -137,19 +137,19 @@ interface OptimizedWallpaper {
 
 function transformToOptimized(photos: any[]): OptimizedWallpaper[] {
   return photos.map((photo) => {
-    const aspectRatio = photo. width / photo.height;
+    const aspectRatio = photo.width / photo.height;
     const calculatedHeight = Math.round(CARD_WIDTH / aspectRatio);
-    const cardHeight = Math.max(MIN_CARD_HEIGHT, Math. min(calculatedHeight, MAX_CARD_HEIGHT));
+    const cardHeight = Math.max(MIN_CARD_HEIGHT, Math.min(calculatedHeight, MAX_CARD_HEIGHT));
 
     return {
       id: String(photo.id),
       // Medium for grid (fast loading)
-      imageUri: photo.src?. medium || photo.src?. small || '',
+      imageUri: photo.src?.medium || photo.src?.small || '',
       // Large for viewer/favorites
-      fullImageUri: photo.src?. large2x || photo.src?. large || photo.src?.medium || '',
+      fullImageUri: photo.src?.large2x || photo.src?.large || photo.src?.medium || '',
       photographer: photo.photographer || 'Unknown',
       cardHeight,
-      avgColor: photo. avg_color || '#E2E8F0',
+      avgColor: photo.avg_color || '#E2E8F0',
       width: photo.width || 1080,
       height: photo.height || 1920,
     };
@@ -184,29 +184,29 @@ function useRecentSearches() {
 
   const loadRecentSearches = async () => {
     try {
-      const stored = await AsyncStorage. getItem(STORAGE_KEY);
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) setRecentSearches(JSON.parse(stored));
     } catch {}
   };
 
   const addRecentSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
-    if (! trimmed) return;
+    if (!trimmed) return;
 
     setRecentSearches((prev) => {
       const updated = [
         trimmed,
-        ... prev.filter((item) => item. toLowerCase() !== trimmed. toLowerCase()),
+        ...prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase()),
       ].slice(0, MAX_RECENT_SEARCHES);
 
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)). catch(() => {});
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
       return updated;
     });
   }, []);
 
   const clearRecentSearches = useCallback(async () => {
     setRecentSearches([]);
-    await AsyncStorage.removeItem(STORAGE_KEY). catch(() => {});
+    await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   }, []);
 
   const removeRecentSearch = useCallback(async (query: string) => {
@@ -265,8 +265,8 @@ const ResultCard = React.memo(
 
         {/* Photographer Name */}
         <View style={styles.cardInfo}>
-          <Text style={styles. photographerName} numberOfLines={1}>
-            {item. photographer}
+          <Text style={styles.photographerName} numberOfLines={1}>
+            {item.photographer}
           </Text>
         </View>
 
@@ -283,7 +283,7 @@ const ResultCard = React.memo(
           <Ionicons
             name={isFavorite ? 'heart' : 'heart-outline'}
             size={18}
-            color={isFavorite ?  '#EF4444' : '#FFFFFF'}
+            color={isFavorite ? '#EF4444' : '#FFFFFF'}
           />
         </Pressable>
       </Pressable>
@@ -314,10 +314,10 @@ const CategoryCard = React.memo(
         android_ripple={RIPPLE_CONFIG}
       >
         <View style={[styles.categoryIcon, { backgroundColor: item.color }]}>
-          <Ionicons name={item. icon} size={24} color="#FFFFFF" />
+          <Ionicons name={item.icon} size={24} color="#FFFFFF" />
         </View>
         <Text style={styles.categoryName} numberOfLines={1}>
-          {item. name}
+          {item.name}
         </Text>
       </Pressable>
     );
@@ -385,7 +385,7 @@ export default function SearchScreen() {
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       if (allPages.length >= MAX_PAGES) return undefined;
-      if (allPages. length * PER_PAGE >= lastPage. total_results) return undefined;
+      if (allPages.length * PER_PAGE >= lastPage.total_results) return undefined;
       return allPages.length + 1;
     },
     enabled: activeSearchQuery.length >= 2,
@@ -398,7 +398,7 @@ export default function SearchScreen() {
 
   // Flattened wallpapers
   const wallpapers = useMemo((): OptimizedWallpaper[] => {
-    if (!data?. pages) return EMPTY_ARRAY;
+    if (!data?.pages) return EMPTY_ARRAY;
     return data.pages.flatMap((page) => page.wallpapers);
   }, [data?.pages]);
 
@@ -414,10 +414,10 @@ export default function SearchScreen() {
   // ==========================================================================
 
   useEffect(() => {
-    if (debouncedQuery. trim(). length >= 2) {
-      setActiveSearchQuery(debouncedQuery. trim());
-      addRecentSearch(debouncedQuery. trim());
-    } else if (debouncedQuery. length === 0) {
+    if (debouncedQuery.trim().length >= 2) {
+      setActiveSearchQuery(debouncedQuery.trim());
+      addRecentSearch(debouncedQuery.trim());
+    } else if (debouncedQuery.length === 0) {
       setActiveSearchQuery('');
     }
   }, [debouncedQuery, addRecentSearch]);
@@ -484,8 +484,8 @@ export default function SearchScreen() {
   const handleCategoryPress = useCallback(
     (category: CategoryItem) => {
       setSearchQuery(category.name);
-      setActiveSearchQuery(category. query);
-      addRecentSearch(category. name);
+      setActiveSearchQuery(category.query);
+      addRecentSearch(category.name);
       Keyboard.dismiss();
     },
     [addRecentSearch]
@@ -495,7 +495,7 @@ export default function SearchScreen() {
     (item: OptimizedWallpaper) => {
       router.push({
         pathname: '/viewer',
-        params: { id: item. id },
+        params: { id: item.id },
       });
     },
     [router]
@@ -507,8 +507,8 @@ export default function SearchScreen() {
       toggleFavorite({
         id: item.id,
         imageUri: item.imageUri,
-        fullImageUri: item. fullImageUri,
-        photographer: item. photographer,
+        fullImageUri: item.fullImageUri,
+        photographer: item.photographer,
         avgColor: item.avgColor,
         width: item.width,
         height: item.height,
@@ -528,7 +528,7 @@ export default function SearchScreen() {
   }, [refetch]);
 
   const handleSubmitSearch = useCallback(() => {
-    if (searchQuery. trim().length >= 2) {
+    if (searchQuery.trim().length >= 2) {
       setActiveSearchQuery(searchQuery.trim());
       addRecentSearch(searchQuery.trim());
       Keyboard.dismiss();
@@ -546,7 +546,7 @@ export default function SearchScreen() {
         index={index}
         onPress={() => handleWallpaperPress(item)}
         onFavorite={() => handleFavoritePress(item)}
-        isFavorite={favoriteIds. has(item.id)}
+        isFavorite={favoriteIds.has(item.id)}
       />
     ),
     [handleWallpaperPress, handleFavoritePress, favoriteIds]
@@ -557,7 +557,7 @@ export default function SearchScreen() {
   const overrideItemLayout = useCallback(
     (layout: { span?: number; size?: number }, item: OptimizedWallpaper) => {
       layout.size = item.cardHeight + CARD_GAP;
-      layout. span = 1;
+      layout.span = 1;
     },
     []
   );
@@ -574,7 +574,7 @@ export default function SearchScreen() {
     () => (
       <View style={styles.resultsHeader}>
         <Text style={styles.resultsText}>
-          {totalResults > 0 ?  `${totalResults. toLocaleString()} results` : 'Searching...'}
+          {totalResults > 0 ? `${totalResults.toLocaleString()} results` : 'Searching...'}
         </Text>
       </View>
     ),
@@ -587,12 +587,12 @@ export default function SearchScreen() {
       return (
         <View style={styles.footer}>
           <ActivityIndicator size="small" color={COLORS.primary} />
-          <Text style={styles. footerText}>Loading more...</Text>
+          <Text style={styles.footerText}>Loading more...</Text>
         </View>
       );
     }
 
-    if (! hasNextPage && wallpapers.length > 0) {
+    if (!hasNextPage && wallpapers.length > 0) {
       return (
         <View style={styles.footer}>
           <Ionicons name="checkmark-done-circle" size={20} color={COLORS.primary} />
@@ -601,14 +601,14 @@ export default function SearchScreen() {
       );
     }
 
-    return <View style={styles. footerSpacer} />;
+    return <View style={styles.footerSpacer} />;
   }, [isFetchingNextPage, hasNextPage, wallpapers.length]);
 
   // Empty Component
   const ListEmpty = useMemo(() => {
     if (isLoading) {
       return (
-        <View style={styles. centerContainer}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Searching...</Text>
         </View>
@@ -621,7 +621,7 @@ export default function SearchScreen() {
           <Ionicons name="search-outline" size={50} color={COLORS.primary} />
         </View>
         <Text style={styles.emptyTitle}>No results found</Text>
-        <Text style={styles. emptySubtitle}>Try different keywords</Text>
+        <Text style={styles.emptySubtitle}>Try different keywords</Text>
       </View>
     );
   }, [isLoading]);
@@ -650,7 +650,7 @@ export default function SearchScreen() {
       </View>
 
       {/* Search Bar */}
-      <View style={styles. searchContainer}>
+      <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#94A3B8" />
           <TextInput
@@ -664,7 +664,7 @@ export default function SearchScreen() {
             autoCorrect={false}
             returnKeyType="search"
           />
-          {searchQuery. length > 0 && (
+          {searchQuery.length > 0 && (
             <Pressable onPress={handleClearSearch} hitSlop={HITSLOP}>
               <Ionicons name="close-circle" size={20} color="#94A3B8" />
             </Pressable>
@@ -673,7 +673,7 @@ export default function SearchScreen() {
       </View>
 
       {/* Content */}
-      {! isSearching ?  (
+      {!isSearching ? (
         // Browse Mode
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -689,7 +689,7 @@ export default function SearchScreen() {
                   <Text style={styles.clearText}>Clear</Text>
                 </Pressable>
               </View>
-              {recentSearches. slice(0, 5).map((item, index) => (
+              {recentSearches.slice(0, 5).map((item, index) => (
                 <Pressable
                   key={`recent-${index}`}
                   style={styles.recentItem}
@@ -712,7 +712,7 @@ export default function SearchScreen() {
           )}
 
           {/* Trending Searches */}
-          <View style={styles. section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Trending</Text>
             <View style={styles.tagsContainer}>
               {TRENDING_SEARCHES.map((item, index) => (
@@ -723,7 +723,7 @@ export default function SearchScreen() {
                   android_ripple={RIPPLE_CONFIG}
                 >
                   <Ionicons name="trending-up" size={14} color={COLORS.primary} />
-                  <Text style={styles. tagText}>{item}</Text>
+                  <Text style={styles.tagText}>{item}</Text>
                 </Pressable>
               ))}
             </View>
@@ -735,7 +735,7 @@ export default function SearchScreen() {
             <FlatList
               data={CATEGORIES as CategoryItem[]}
               renderItem={renderCategoryItem}
-              keyExtractor={(item) => item. id}
+              keyExtractor={(item) => item.id}
               numColumns={4}
               scrollEnabled={false}
               contentContainerStyle={styles.categoriesGrid}
