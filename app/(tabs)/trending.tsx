@@ -573,7 +573,7 @@ export default function TrendingScreen() {
           </Pressable>
         </View>
 
-        <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
+        {/* <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} /> */}
       </View>
     );
   }
@@ -658,7 +658,7 @@ export default function TrendingScreen() {
       />
 
       {/* Bottom Navigation */}
-      <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
+      {/* <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} /> */}
     </View>
   );
 }

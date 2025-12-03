@@ -786,7 +786,7 @@ export default function SearchScreen() {
       )}
 
       {/* Bottom Navigation */}
-      <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
+      {/* <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} /> */}
     </View>
   );
 }

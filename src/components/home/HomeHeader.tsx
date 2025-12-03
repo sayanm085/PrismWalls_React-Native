@@ -18,7 +18,7 @@ export const HomeHeader = React.memo(function HomeHeader({
 }: Props) {
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
-      <IconButton icon="menu" size={26} onPress={onMenuPress} delay={100} />
+      {/* <IconButton icon="menu" size={26} onPress={onMenuPress} delay={100} /> */}
 
       <MotiView
         from={{ opacity: 0, translateY: -20 }}

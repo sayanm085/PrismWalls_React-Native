@@ -117,7 +117,7 @@ const ActionButton = ({ icon, label, onPress, loading }: ActionButtonProps) => (
     disabled={loading}
   >
     <View style={styles.actionIconContainer}>
-      {loading ?  (
+      {loading ? (
         <ActivityIndicator size="small" color="#fff" />
       ) : (
         <Ionicons name={icon} size={24} color="#fff" />
@@ -200,15 +200,15 @@ export default function ViewerScreen() {
       }
     });
 
-  const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
+  const panGesture = Gesture. Pan()
+    . onUpdate((event) => {
       if (scale.value > 1) {
         translateX.value = savedTranslateX. value + event.translationX;
         translateY.value = savedTranslateY.value + event. translationY;
       }
     })
     .onEnd(() => {
-      savedTranslateX.value = translateX.value;
+      savedTranslateX. value = translateX.value;
       savedTranslateY.value = translateY.value;
     });
 
@@ -235,7 +235,7 @@ export default function ViewerScreen() {
   const composedGestures = Gesture. Simultaneous(
     pinchGesture,
     panGesture,
-    Gesture. Exclusive(doubleTapGesture, singleTapGesture)
+    Gesture.Exclusive(doubleTapGesture, singleTapGesture)
   );
 
   const animatedImageStyle = useAnimatedStyle(() => ({
@@ -273,7 +273,7 @@ export default function ViewerScreen() {
       if (saveToGallery) {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert(
+          Alert. alert(
             'Permission Required',
             'Please grant permission to save images.'
           );
@@ -287,7 +287,7 @@ export default function ViewerScreen() {
 
       if (fileUri) {
         if (saveToGallery) {
-          await MediaLibrary.saveToLibraryAsync(fileUri);
+          await MediaLibrary. saveToLibraryAsync(fileUri);
           Alert.alert(
             'Success!  ✓',
             `Wallpaper saved to gallery!\n\nQuality: ${
@@ -345,7 +345,7 @@ export default function ViewerScreen() {
     }
   }, [downloadUrl, photoId]);
 
-  // ✅ SET WALLPAPER - Reliable Method
+  // SET WALLPAPER - Reliable Method
   const handleSetWallpaper = useCallback(async () => {
     if (!downloadUrl) return;
 
@@ -385,7 +385,7 @@ export default function ViewerScreen() {
       }
 
       // Step 2: Download the image
-      const filename = `PrismWalls_${photoId}_${Date.now()}. jpg`;
+      const filename = `PrismWalls_${photoId}_${Date.now()}.jpg`;
       const fileUri = await downloadFile(downloadUrl, filename);
 
       if (! fileUri) {
@@ -397,7 +397,7 @@ export default function ViewerScreen() {
 
       // Step 4: Open Android Wallpaper Settings
       await IntentLauncher.startActivityAsync(
-        IntentLauncher.ActivityAction.WALLPAPER_SETTINGS
+        IntentLauncher. ActivityAction.WALLPAPER_SETTINGS
       );
 
       // Step 5: Show instructions
@@ -408,7 +408,7 @@ export default function ViewerScreen() {
       );
     } catch (error) {
       console.error('Set wallpaper error:', error);
-      Alert.alert(
+      Alert. alert(
         'Image Saved! ',
         'Wallpaper saved to gallery.\n\nTo set manually:\n1. Open Gallery\n2. Find the image\n3. Tap ⋮ → "Set as wallpaper"',
         [{ text: 'OK' }]
@@ -424,7 +424,7 @@ export default function ViewerScreen() {
 
     toggleFavorite({
       id: String(photo.id),
-      imageUri: photo.src?. medium || photo.src?.small || '',
+      imageUri: photo.src?. medium || photo.src?. small || '',
       fullImageUri:
         photo.src?.large2x || photo.src?.large || photo. src?.original || '',
       photographer: photo.photographer || 'Unknown',

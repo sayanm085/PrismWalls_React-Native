@@ -464,7 +464,7 @@ export default function FavoritesScreen() {
       />
 
       {/* Bottom Navigation */}
-      <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
+      {/* <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} /> */}
     </View>
   );
 }

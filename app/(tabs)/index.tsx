@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * PRISMWALLS - Home Screen (With Working Favorites)
+ * PRISMWALLS - Home Screen (With Working Favorites, Banner & Categories)
  * =============================================================================
  *
  * Features:
@@ -9,11 +9,11 @@
  * - Professional loading architecture
  * - Working heart button
  * - Animated header with search
- * - Banner carousel
- * - Category section
+ * - WORKING Banner carousel
+ * - WORKING Category section
  * - Infinite scroll
  *
- * Author: PRISMWALLS Team
+ * Author: Shotlin Team
  * =============================================================================
  */
 
@@ -66,7 +66,7 @@ import { useFavoritesStore } from '@/src/store/useFavoritesStore';
 
 // Types & Constants
 import { CACHE_TIMES } from '@/src/constants/apiKeys';
-import { BannerItem, TabName } from '@/src/types';
+import { BannerItem, CategoryItem, TabName } from '@/src/types';
 
 // =============================================================================
 // CONSTANTS
@@ -176,7 +176,7 @@ const WallpaperCard = React.memo(
           </Text>
         </View>
 
-        {/* ✅ Favorite Button - Connected to Store */}
+        {/* Favorite Button - Connected to Store */}
         <Pressable
           onPress={onFavoritePress}
           style={[
@@ -208,7 +208,7 @@ const WallpaperCard = React.memo(
 const LoadingView = () => (
   <View style={styles.loadingContainer}>
     <ActivityIndicator size="large" color={COLORS.primary} />
-    <Text style={styles.loadingText}>Loading wallpapers... </Text>
+    <Text style={styles.loadingText}>Loading wallpapers...</Text>
   </View>
 );
 
@@ -240,11 +240,11 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const scrollY = useSharedValue(0);
 
-  // ✅ Zustand Favorites Store
+  // Zustand Favorites Store
   const favorites = useFavoritesStore((state) => state.favorites);
   const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
 
-  // ✅ Create a Set for O(1) lookup of favorites
+  // Create a Set for O(1) lookup of favorites
   const favoriteIds = useMemo(() => {
     return new Set(favorites.map((f) => f.id));
   }, [favorites]);
@@ -354,22 +354,38 @@ export default function HomeScreen() {
     router.push('/search');
   }, [router]);
 
+  // ✅ FIXED: Banner Press Handler
   const handleBannerPress = useCallback(
     (item: BannerItem) => {
-      router.push('/viewer');
+      // Navigate to search with banner's search query or title
+      if (item.searchQuery) {
+        router.push({
+          pathname: '/search',
+          params: { query: item.searchQuery },
+        });
+      } else if (item.title) {
+        router.push({
+          pathname: '/search',
+          params: { query: item.title },
+        });
+      } else {
+        router.push('/search');
+      }
     },
     [router]
   );
 
+  // ✅ FIXED: Category Press Handler
   const handleCategoryPress = useCallback(
-    (id?: string | number) => {
-      const category = CATEGORIES.find((c) => c.id === id);
-      if (category) {
-        router.push({
-          pathname: '/search',
-          params: { category: category.title },
-        });
-      }
+    (category: CategoryItem) => {
+      // Navigate to search with category title as query
+      router.push({
+        pathname: '/search',
+        params: { 
+          category: category.title,
+          query: category.title,
+        },
+      });
     },
     [router]
   );
@@ -384,7 +400,7 @@ export default function HomeScreen() {
     [router]
   );
 
-  // ✅ Working Favorite Handler
+  // Working Favorite Handler
   const handleFavoritePress = useCallback(
     (item: OptimizedWallpaper) => {
       toggleFavorite({
