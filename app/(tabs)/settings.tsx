@@ -469,14 +469,14 @@ export default function SettingsScreen() {
 
   // Privacy Policy
   const handlePrivacyPolicy = useCallback(() => {
-    Linking.openURL('https://prismwalls.com/privacy-policy').catch(() => {
+    Linking.openURL('https://shotlin.framer.ai/privacy-policy-prismwalls').catch(() => {
       Alert.alert('Error', 'Could not open privacy policy.');
     });
   }, []);
 
   // Terms of Service
   const handleTermsOfService = useCallback(() => {
-    Linking.openURL('https://prismwalls.com/terms').catch(() => {
+    Linking.openURL('https://shotlin.framer.ai/terms-and-conditions-prismwalls').catch(() => {
       Alert.alert('Error', 'Could not open terms of service.');
     });
   }, []);
