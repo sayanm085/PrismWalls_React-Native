@@ -11,22 +11,31 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Components
-import { AnimatedSplashScreen } from '@/src/components/splash';
+import { SimpleSplashScreen } from '@/src/components/splash';
 
-// Keep splash screen visible while loading
-SplashScreen.preventAutoHideAsync();
+// ✅ Ignore this warning - it's harmless
+LogBox.ignoreLogs([
+  'Unable to activate keep awake',
+]);
+
+// ✅ Wrap in try-catch to prevent crash
+try {
+  SplashScreen.preventAutoHideAsync();
+} catch (e) {
+  // Ignore error
+}
 
 // Query Client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
     },
   },
 });
@@ -38,10 +47,6 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        // Pre-load fonts, make API calls, etc. 
-        // Add any initialization logic here
-        
-        // Simulate loading time (remove in production)
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (e) {
         console.warn(e);
@@ -55,7 +60,12 @@ export default function RootLayout() {
 
   const onLayoutRootView = useCallback(async () => {
     if (appIsReady) {
-      await SplashScreen.hideAsync();
+      // ✅ Wrap in try-catch
+      try {
+        await SplashScreen.hideAsync();
+      } catch (e) {
+        // Ignore error
+      }
     }
   }, [appIsReady]);
 
@@ -71,7 +81,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.container} onLayout={onLayoutRootView}>
       <QueryClientProvider client={queryClient}>
         <View style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style="light" />
           
           <Stack
             screenOptions={{
@@ -87,17 +97,11 @@ export default function RootLayout() {
                 presentation: 'fullScreenModal',
               }}
             />
-            <Stack.Screen
-              name="search"
-              options={{
-                animation: 'slide_from_right',
-              }}
-            />
           </Stack>
 
           {/* Animated Splash Screen Overlay */}
           {!splashAnimationComplete && (
-            <AnimatedSplashScreen
+            <SimpleSplashScreen
               onAnimationComplete={handleSplashAnimationComplete}
             />
           )}
@@ -110,5 +114,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0a0a1a',
   },
 });

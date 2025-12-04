@@ -1,1 +1,1 @@
-export { AnimatedSplashScreen } from './AnimatedSplashScreen';
+export { SimpleSplashScreen } from './SimpleSplashScreen';
