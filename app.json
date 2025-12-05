@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PrismWalls",
-    "slug": "PrismWalls",
+    "slug": "prismwalls",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -115,10 +115,10 @@
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "bca91aa1-9c95-435a-911e-8104a5ab2b64"
       }
     },
-    "owner": "SayanMondal",
+    "owner": "sayanm085",
     "updates": {
       "url": "https://u.expo.dev/your-project-id-here"
     },
