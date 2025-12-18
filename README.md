@@ -42,6 +42,31 @@ To learn more about developing your project with Expo, look at the following res
 - [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
 - [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
+## Troubleshooting
+
+### iOS Bundling Error: "Unable to resolve ../../App"
+
+If you encounter an error like:
+```
+Unable to resolve "../../App" from "node_modules/expo/AppEntry.js"
+```
+
+This typically occurs when:
+1. Dependencies are not installed
+2. Metro bundler cache is stale
+
+**Solution:**
+```bash
+# Clean and reinstall dependencies
+rm -rf node_modules
+npm install
+
+# Clear Metro bundler cache
+npx expo start -c
+```
+
+This project uses [Expo Router](https://docs.expo.dev/router/introduction/) with file-based routing. The entry point is configured in `package.json` as `"main": "expo-router/entry"`.
+
 ## Join the community
 
 Join our community of developers creating universal apps.
